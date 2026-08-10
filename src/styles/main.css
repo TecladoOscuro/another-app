@@ -550,12 +550,14 @@ a {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  padding: 12px 14px;
+  padding: 10px 12px;
   font-size: 16px;
   outline: none;
   transition: border var(--duration-fast) var(--ease-ios),
     background var(--duration-fast) var(--ease-ios);
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .field textarea {
@@ -573,7 +575,8 @@ a {
 .field-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 10px;
+  gap: 8px;
+  width: 100%;
 }
 
 .field {
@@ -1179,6 +1182,55 @@ a {
   color: var(--text-subtle);
 }
 
+/* ---- Taste chips (grid of percentages) ---- */
+
+.taste-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.taste-chip {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 14px 12px;
+  position: relative;
+  overflow: hidden;
+}
+
+.taste-chip::before {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--c);
+}
+
+.taste-chip__pct {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--c);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.taste-chip__label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  margin-top: 6px;
+}
+
+.taste-chip__count {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
 /* ---- Settings rows with select ---- */
 
 .settings-row select {
@@ -1370,11 +1422,12 @@ a {
   display: grid;
   grid-auto-flow: column;
   grid-template-rows: repeat(7, 1fr);
-  gap: 3px;
+  gap: 2px;
   padding: 8px 0;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
+  max-width: 100%;
 }
 
 .heatmap::-webkit-scrollbar {
@@ -1382,12 +1435,53 @@ a {
 }
 
 .heatmap__cell {
-  width: 12px;
-  height: 12px;
-  border-radius: 3px;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
   background: var(--bg-card);
   border: 1px solid var(--border);
   flex-shrink: 0;
+}
+
+.heatmap__nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.heatmap__nav-label {
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 11px;
+  flex: 1;
+}
+
+.heatmap__nav-chips {
+  display: flex;
+  gap: 4px;
+}
+
+.heatmap__nav-chip {
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: 500;
+}
+
+.heatmap__nav-chip.is-active {
+  background: var(--accent);
+  color: var(--accent-on);
+  border-color: var(--accent);
 }
 
 .heatmap__legend {

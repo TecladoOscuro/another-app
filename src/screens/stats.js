@@ -37,6 +37,7 @@ let currentYear = null;
 let currentMonth = null;
 let currentDevice = '';
 let currentSourceType = '';
+let currentHeatmapRange = 90; // días
 let currentWrappedYear = null;
 let lastMain = null;
 
@@ -89,7 +90,7 @@ export async function renderStats(main) {
 
   const week = weeklySeries(entries, 12, anchorsTs(entries));
   const daily30 = computeDailyBars(entries, 30);
-  const heatmap = heatmapByDay(entries, 182);
+  const heatmap = heatmapByDay(entries, currentHeatmapRange);
   const months = monthlySeries(entries, wrappedYear);
   const hours = hourlyDistribution(entries);
   const weekdays = weekdayDistribution(entries);
@@ -132,15 +133,13 @@ export async function renderStats(main) {
 
       ${summaryGrid(t, streaks, uniqueActresses(entries), byCategory.length)}
 
-      ${collapsibleSection('heatmap', 'Heatmap · 6 meses', renderHeatmapHtml(heatmap), t.count > 0)}
+      ${collapsibleSection('heatmap', 'Heatmap', renderHeatmapHtml(heatmap, currentHeatmapRange), t.count > 0)}
 
       ${collapsibleSection('daily', 'Últimos 30 días', dailyListHtml(daily30), t.count > 0)}
 
       ${collapsibleSection('hours', 'Por hora del día', simpleBarsHtml(hours, (i) => `${pad2(i)}:00`), t.count > 0)}
 
       ${collapsibleSection('weekdays', 'Por día de la semana', simpleBarsHtml(weekdays, (i) => WEEKDAYS_ES[i]), t.count > 0)}
-
-      ${collapsibleSection('weeks', 'Últimas 12 semanas', weekListHtml(week), t.count > 0)}
 
       ${collapsibleSection('months', `Por mes · ${wrappedYear}`, simpleBarsHtml(months, (i) => MONTHS_SHORT[i], true), t.count > 0)}
 
@@ -339,20 +338,20 @@ function dailyListHtml(counts) {
 
 function simpleBarsHtml(arr, labelFn, isMonthIndex = false) {
   if (!arr || !arr.length) return emptyCard('Sin datos.');
-  // Si arr[0] es un array [k, v], son entries. Si es número, es array plano.
   const isFlat = typeof arr[0] === 'number';
   const entries = isFlat ? arr.map((v, i) => [isMonthIndex ? i : labelFn(i), v]) : arr;
   const max = Math.max(1, ...entries.map(([, v]) => v));
   return `<div class="card list">${entries
-    .map(([key, v]) => {
+    .map(([key, v], i) => {
       const pct = Math.round((v / max) * 100);
       return `
         <div class="row-item">
+          <div class="row-item__rank">${i + 1}</div>
           <div class="row-item__info">
             <div class="row-item__title">${escapeHtml(String(key))}</div>
-            <div class="row-item__sub">${v} ${v === 1 ? 'vez' : 'veces'}</div>
           </div>
           <div class="row-item__bar"><span style="width:${pct}%"></span></div>
+          <div class="row-item__value">${v}</div>
         </div>`;
     })
     .join('')}</div>`;
@@ -377,29 +376,40 @@ function weekListHtml(week) {
     .join('')}</div>`;
 }
 
-function renderHeatmapHtml(heatmap) {
-  return `<div class="card"><div class="heatmap" id="heatmap"></div>
-    <div class="heatmap__legend">menos <span class="heatmap__cell" style="background:var(--bg-elevated)"></span><span class="heatmap__cell" style="background:color-mix(in srgb, var(--accent) 22%, var(--bg-elevated))"></span><span class="heatmap__cell" style="background:color-mix(in srgb, var(--accent) 44%, var(--bg-elevated))"></span><span class="heatmap__cell" style="background:color-mix(in srgb, var(--accent) 66%, var(--bg-elevated))"></span><span class="heatmap__cell" style="background:var(--accent)"></span> más</div></div>`;
+function renderHeatmapHtml(heatmap, range) {
+  const options = [
+    { days: 30, label: '1m' },
+    { days: 90, label: '3m' },
+    { days: 180, label: '6m' },
+    { days: 365, label: '1a' },
+  ];
+  return `<div class="card">
+    <div class="heatmap__nav">
+      <span class="heatmap__nav-label">Últimos ${range} días</span>
+      <div class="heatmap__nav-chips">
+        ${options.map(o => `<button type="button" class="heatmap__nav-chip ${o.days === range ? 'is-active' : ''}" data-heatmap-range="${o.days}">${o.label}</button>`).join('')}
+      </div>
+    </div>
+    <div class="heatmap" id="heatmap"></div>
+    <div class="heatmap__legend">menos <span class="heatmap__cell" style="background:var(--bg-elevated)"></span><span class="heatmap__cell" style="background:color-mix(in srgb, var(--accent) 22%, var(--bg-elevated))"></span><span class="heatmap__cell" style="background:color-mix(in srgb, var(--accent) 44%, var(--bg-elevated))"></span><span class="heatmap__cell" style="background:color-mix(in srgb, var(--accent) 66%, var(--bg-elevated))"></span><span class="heatmap__cell" style="background:var(--accent)"></span> más</div>
+  </div>`;
 }
 
 const PALETTE = ['#ff3b6b', '#ff9f0a', '#00b894', '#0984e3', '#6c5ce7', '#fdcb6e', '#e17055', '#74b9ff', '#a29bfe', '#55efc4'];
 
 function tasteDonut(map, label) {
-  if (!map || !map.size) return emptyCard('Sin datos suficientes.');
+  if (!map || !map.size) return emptyCard('Sin datos suficientes. Las actrices deben tener info de Pornhub (rank, vídeos, etc.).');
   const entries = [...map.entries()].sort((a, b) => b[1] - a[1]);
   const total = entries.reduce((a, [, v]) => a + v, 0);
-  return `<div class="card list">${entries
+  return `<div class="taste-grid">${entries
     .map(([k, v], i) => {
       const pct = total > 0 ? Math.round((v / total) * 100) : 0;
       const color = PALETTE[i % PALETTE.length];
       return `
-        <div class="row-item">
-          <div class="row-item__dot" style="background:${color}"></div>
-          <div class="row-item__info">
-            <div class="row-item__title">${escapeHtml(k)}</div>
-            <div class="row-item__sub">${v} ${v === 1 ? 'vez' : 'veces'} · ${pct}%</div>
-          </div>
-          <div class="row-item__bar"><span style="width:${pct}%; background:${color}"></span></div>
+        <div class="taste-chip" style="--c:${color}">
+          <div class="taste-chip__pct">${pct}%</div>
+          <div class="taste-chip__label">${escapeHtml(k)}</div>
+          <div class="taste-chip__count">${v} ${v === 1 ? 'vez' : 'veces'}</div>
         </div>`;
     })
     .join('')}</div>`;
