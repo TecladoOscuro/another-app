@@ -223,29 +223,18 @@ export const PH_CATEGORY_GROUPS = {
 };
 
 export const SOURCE_TYPES = [
-  { id: 'clip', label: 'Clip de sitio porno', icon: '🎬' },
+  { id: 'web', label: 'Web porno', icon: '🌐' },
   { id: 'ad', label: 'Anuncio de putas', icon: '📢' },
-  { id: 'photo', label: 'Foto propia o de alguien conocido', icon: '📸' },
-  { id: 'memory', label: 'Recuerdo o fantasía', icon: '🧠' },
-  { id: 'cam', label: 'Webcam en vivo', icon: '📹' },
-  { id: 'chat', label: 'Chat / sexting', icon: '💬' },
-  { id: 'onlyfans', label: 'OnlyFans / similar', icon: '💎' },
-  { id: 'irl', label: 'Experiencia IRL', icon: '🛏️' },
-  { id: 'custom', label: 'Otro (especificar)', icon: '✨' },
+  { id: 'onlyfans', label: 'OnlyFans', icon: '💎' },
+  { id: 'cam', label: 'Webcam', icon: '📹' },
+  { id: 'memory', label: 'Memoria o fotos', icon: '🧠' },
+  { id: 'irl', label: 'Experiencia real', icon: '💋' },
 ];
 
 export const DEVICES = [
-  'iPhone',
+  'Móvil',
   'iPad',
-  'Mac',
   'PC',
-  'Android',
-  'Tablet Android',
-  'Smart TV',
-  'Apple Watch',
-  'Chromebook',
-  'Consola',
-  'Portátil',
   'Otro',
 ];
 

@@ -512,6 +512,7 @@ a {
 .modal-body {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   padding: 4px 4px 16px;
@@ -1186,6 +1187,79 @@ a {
   line-height: 1;
   font-weight: 700;
   opacity: 0.8;
+}
+
+/* ---- iOS toggle (lubricante) ---- */
+
+.ios-toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  padding: 6px 0;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.ios-toggle input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.ios-toggle__track {
+  position: relative;
+  width: 50px;
+  height: 30px;
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  transition: background var(--duration-fast) var(--ease-ios);
+  flex-shrink: 0;
+}
+
+.ios-toggle__thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transition: transform var(--duration) var(--ease-spring);
+}
+
+.ios-toggle input[type="checkbox"]:checked ~ .ios-toggle__track {
+  background: var(--success);
+  border-color: var(--success);
+}
+
+.ios-toggle input[type="checkbox"]:checked ~ .ios-toggle__track .ios-toggle__thumb {
+  transform: translateX(20px);
+}
+
+.ios-toggle__label {
+  font-size: 15px;
+  font-weight: 500;
+  flex: 1;
+}
+
+/* ---- Record sections (modal layout) ---- */
+
+.record-section {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.record-section:last-child {
+  border-bottom: 0;
+}
+
+.record-section:first-child {
+  padding-top: 0;
 }
 
 /* ---- Cat picker head ---- */

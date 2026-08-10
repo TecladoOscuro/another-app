@@ -15,7 +15,7 @@ import { openModal, toast } from '../ui/modal.js';
 import { createSelectWithAdd } from '../ui/selectWithAdd.js';
 import { getOptions, appendCustomOption } from '../services/options.js';
 import { getSetting, setSetting } from '../db.js';
-import { loadStarsDataset, searchStars, getStar, findOrCreateActress } from '../services/actressSearch.js';
+import { loadStarsDataset, searchStars, getStar } from '../services/actressSearch.js';
 
 const RECENT_CAT_KEY = 'recentCategories';
 
@@ -53,7 +53,54 @@ function pushRecentActress(name) {
   localStorage.setItem('recentActresses', JSON.stringify(recents.slice(0, 8)));
 }
 
-export async function openRecordModal({ presetAt = null, editId = null } = {}) {
+function dateToInput(ts) {
+  const d = new Date(ts);
+  const pad = (n) => n.toString().padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function timeToInput(ts) {
+  const d = new Date(ts);
+  const pad = (n) => n.toString().padStart(2, '0');
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function hasRealActressData(a) {
+  if (!a) return false;
+  if (a.notFound) return false;
+  if (a.transient) return false;
+  return a.rank || a.videosCount || a.subscribers || a.born || a.height || a.weight || a.relation || a.ethnicity || a.measurements || a.avatar || (a.tags && a.tags.length);
+}
+
+function guessCategoriesFromActress(a) {
+  const cats = new Set();
+  if (!a) return cats;
+  if (a.born) {
+    const yearMatch = a.born.match(/\b(19|20)\d{2}\b/);
+    if (yearMatch) {
+      const age = new Date().getFullYear() - parseInt(yearMatch[0], 10);
+      if (age >= 40) cats.add('MILF');
+      else if (age >= 30) cats.add('MILF');
+      else if (age < 25) cats.add('Teen');
+      else if (age < 30) cats.add('Young');
+    }
+  }
+  if (a.ethnicity) {
+    const e = a.ethnicity.toLowerCase();
+    if (e.includes('latin') || e.includes('hispanic')) cats.add('Latina');
+    if (e.includes('asian')) cats.add('Asian');
+    if (e.includes('ebony') || e.includes('black')) cats.add('Black');
+    if (e.includes('caucasian') || e.includes('white')) cats.add('Caucasian');
+    if (e.includes('middle eastern') || e.includes('arab')) cats.add('Arab');
+  }
+  if (a.relation) {
+    const r = a.relation.toLowerCase();
+    if (r.includes('married')) cats.add('MILF');
+  }
+  return cats;
+}
+
+export async function openRecordModal({ presetAt = null, editId = null, simple = false } = {}) {
   let existing = null;
   if (editId) {
     existing = await getEntry(editId);
@@ -63,6 +110,10 @@ export async function openRecordModal({ presetAt = null, editId = null } = {}) {
     }
   }
 
+  if (simple && !editId) {
+    return recordSimple(presetAt);
+  }
+
   const now = presetAt ?? Date.now();
   const allCats = await getOptions('category');
   const defaultDevice = existing ? (existing.device || '') : await getDefaultDevice();
@@ -70,103 +121,121 @@ export async function openRecordModal({ presetAt = null, editId = null } = {}) {
   const recentActresses = getRecentActresses();
   await loadStarsDataset();
 
+  const initialActressName = existing?.actressName || '';
   const body = document.createElement('div');
   body.innerHTML = `
     <form id="recordForm" autocomplete="off">
 
-      <div class="field">
-        <label>Persona / actriz</label>
-        <div class="search">
-          <input
-            type="text"
-            id="actressInput"
-            name="actressName"
-            placeholder="Escribe o elige reciente"
-            list="actressList"
-            autocomplete="off"
-            value="${escapeAttr(existing?.actressName || (recentActresses[0] || ''))}"
-          />
-          <datalist id="actressList"></datalist>
-        </div>
-        ${
-          recentActresses.length
-            ? `<div class="chips" id="recentActressChips" style="margin-top: 6px;">
+      <div class="record-section">
+        <div class="field">
+          <label>Persona / actriz</label>
+          <div class="search">
+            <input
+              type="text"
+              id="actressInput"
+              name="actressName"
+              placeholder="Escribe o elige reciente"
+              list="actressList"
+              autocomplete="off"
+              value="${escapeAttr(initialActressName)}"
+            />
+            <datalist id="actressList"></datalist>
+          </div>
+          ${
+            recentActresses.length && !initialActressName
+              ? `<div class="chips" id="recentActressChips" style="margin-top: 6px;">
                 ${recentActresses
                   .slice(0, 4)
-                  .map(
-                    (n) =>
-                      `<button type="button" class="chip" data-actress="${escapeAttr(n)}">${escapeHtml(n)}</button>`,
-                  )
+                  .map((n) => `<button type="button" class="chip" data-actress="${escapeAttr(n)}">${escapeHtml(n)}</button>`)
                   .join('')}
+              </div>`
+              : ''
+          }
+          <div id="actressInfo" class="actress-info"></div>
+        </div>
+      </div>
+
+      <div class="record-section">
+        <div class="field">
+          <label>Categorías</label>
+          <div class="multi-cats" id="catChips"></div>
+          <button type="button" class="btn btn--ghost" id="toggleCatPicker" style="margin-top: 6px;">
+            <span id="toggleCatPickerText">+ Elegir categorías</span>
+          </button>
+          <div class="cat-picker" id="catPicker" hidden>
+            <div class="cat-picker__head">
+              <div class="search" style="flex: 1;">
+                <input type="text" id="catSearchInput" placeholder="Buscar..." />
+              </div>
+            </div>
+            <div class="cat-picker__list" id="catPickerList"></div>
+            <div class="cat-picker__add">
+              <input type="text" id="newCatInput" placeholder="O escribe una nueva" />
+              <button type="button" class="btn btn--primary" id="addNewCat">Añadir</button>
+            </div>
+            <button type="button" class="btn" id="doneCats" style="margin-top: 4px;">Listo</button>
+          </div>
+        </div>
+      </div>
+
+      ${
+        existing
+          ? `<div class="record-section">
+            <div class="field-row">
+              <div class="field">
+                <label>Fecha</label>
+                <input type="date" name="date" value="${escapeAttr(dateToInput(existing.at))}" required />
+              </div>
+              <div class="field">
+                <label>Hora</label>
+                <input type="time" name="time" value="${escapeAttr(timeToInput(existing.at))}" required />
+              </div>
+            </div>
+          </div>`
+          : ''
+      }
+
+      <div class="record-section">
+        <div class="field-row">
+          <div class="field">
+            <label>Fuente</label>
+            <select name="sourceType" id="sourceType">
+              <option value="">—</option>
+              ${SOURCE_TYPES.map(
+                (s) => `<option value="${s.id}" ${existing?.sourceType === s.id ? 'selected' : ''}>${s.icon} ${s.label}</option>`,
+              ).join('')}
+            </select>
+          </div>
+          <div class="field" id="deviceField">
+            <label>Dispositivo</label>
+          </div>
+        </div>
+        ${
+          existing
+            ? `<div class="field" id="siteField" style="margin-top: 12px;">
+                <label>Sitio web</label>
               </div>`
             : ''
         }
-        <div id="actressInfo" class="actress-info"></div>
       </div>
 
-      <div class="field">
-        <label>Categorías</label>
-        <div class="multi-cats" id="catChips"></div>
-        <button type="button" class="btn btn--ghost" id="toggleCatPicker" style="margin-top: 6px;">
-          <span id="toggleCatPickerText">+ Elegir categorías</span>
-        </button>
-        <div class="cat-picker" id="catPicker" hidden>
-          <div class="cat-picker__head">
-            <div class="search" style="flex: 1;">
-              <input type="text" id="catSearchInput" placeholder="Buscar..." />
-            </div>
-          </div>
-          <div class="cat-picker__list" id="catPickerList"></div>
-          <div class="cat-picker__add">
-            <input type="text" id="newCatInput" placeholder="O escribe una nueva" />
-            <button type="button" class="btn btn--primary" id="addNewCat">Añadir</button>
-          </div>
-          <button type="button" class="btn" id="doneCats" style="margin-top: 4px;">Listo</button>
-        </div>
-      </div>
-
-      <div class="field-row">
-        <div class="field">
-          <label>Fuente</label>
-          <select name="sourceType" id="sourceType">
-            <option value="">—</option>
-            ${SOURCE_TYPES.map(
-              (s) => `<option value="${s.id}" ${existing?.sourceType === s.id ? 'selected' : ''}>${s.icon} ${s.label}</option>`,
-            ).join('')}
-          </select>
-        </div>
-        <div class="field" id="deviceField">
-          <label>Dispositivo</label>
-        </div>
-      </div>
-
-      <div class="field">
-        <label class="checkbox-row">
+      <div class="record-section">
+        <label class="ios-toggle">
           <input type="checkbox" name="lubricant" id="lubricantCheck" ${existing?.lubricant === 'with' ? 'checked' : ''} />
-          <span>Lubricante</span>
+          <span class="ios-toggle__track"><span class="ios-toggle__thumb"></span></span>
+          <span class="ios-toggle__label">Lubricante</span>
         </label>
       </div>
 
       ${
         existing
-          ? `<div class="field-row">
-            <div class="field">
-              <label>Fecha</label>
-              <input type="date" name="date" value="${escapeAttr(dateToInput(existing.at))}" required />
-            </div>
-            <div class="field">
-              <label>Hora</label>
-              <input type="time" name="time" value="${escapeAttr(timeToInput(existing.at))}" required />
-            </div>
-          </div>
-          <div class="field" id="siteField">
-            <label>Sitio web</label>
-          </div>
-          <div class="field">
-            <label>Notas</label>
-            <textarea name="notes" rows="3">${escapeHtml(existing.notes || '')}</textarea>
-          </div>`
-          : `<div class="field" id="siteField" style="display:none;"><label>Sitio web</label></div>`
+          ? `<div class="record-section">
+              <div class="field">
+                <label>Notas</label>
+                <textarea name="notes" rows="3" placeholder="Lo que quieras recordar">${escapeHtml(existing.notes || '')}</textarea>
+              </div>
+            </div>`
+          : ''
       }
     </form>
   `;
@@ -207,7 +276,6 @@ export async function openRecordModal({ presetAt = null, editId = null } = {}) {
   const catPickerList = body.querySelector('#catPickerList');
   const catSearchInput = body.querySelector('#catSearchInput');
   const newCatInput = body.querySelector('#newCatInput');
-
   const selectedCats = new Set(existingCats);
 
   function rerenderChips() {
@@ -299,10 +367,8 @@ export async function openRecordModal({ presetAt = null, editId = null } = {}) {
   });
   catSearchInput.addEventListener('input', () => renderCatPickerList(catSearchInput.value));
 
-  // ---- Datalist actrices (dataset + guardadas) ----
+  // ---- Datalist actrices ----
   const actressDatalist = body.querySelector('#actressList');
-  await loadStarsDataset();
-  // guardadas
   try {
     const storedActresses = await listActresses();
     const storedNames = new Set();
@@ -317,14 +383,12 @@ export async function openRecordModal({ presetAt = null, editId = null } = {}) {
         actressDatalist.appendChild(opt);
       });
   } catch {}
-  // dataset (top)
   for (const s of searchStars('', 200)) {
     const opt = document.createElement('option');
     opt.value = s.n;
     actressDatalist.appendChild(opt);
   }
 
-  // Recent actress chips
   body.querySelectorAll('#recentActressChips .chip').forEach((c) => {
     c.addEventListener('click', () => {
       body.querySelector('#actressInput').value = c.dataset.actress;
@@ -332,7 +396,7 @@ export async function openRecordModal({ presetAt = null, editId = null } = {}) {
     });
   });
 
-  // ---- Sitio (solo en edit) ----
+  // ---- Sitio (solo edit) ----
   let siteSelect = null;
   if (existing) {
     siteSelect = createSelectWithAdd({
@@ -344,8 +408,8 @@ export async function openRecordModal({ presetAt = null, editId = null } = {}) {
     body.querySelector('#siteField').replaceWith(siteSelect.wrap);
   }
 
-  // ---- Dispositivo ----
-  const deviceSelect = createSelectWithAdd({
+  // ---- Dispositivo (sin botón añadir) ----
+  const deviceSelect = createSimpleSelect({
     name: 'device',
     label: 'Dispositivo',
     value: defaultDevice,
@@ -369,15 +433,12 @@ export async function openRecordModal({ presetAt = null, editId = null } = {}) {
     if (a.source === 'pornhub' && siteSelect && !siteSelect.select.value) {
       siteSelect.select.value = 'Pornhub';
     }
-    // Auto-categorías: si la actriz tiene tags, seleccionarlos
-    if (a.tags && Array.isArray(a.tags)) {
-      const knownCats = new Set(allCats);
-      a.tags.slice(0, 5).forEach((t) => {
-        if (knownCats.has(t)) selectedCats.add(t);
-      });
-      // Tags adicionales que también sean categorías válidas
-      rerenderChips();
-    }
+    // Auto-categorías desde actriz
+    const catsFromActress = guessCategoriesFromActress(a);
+    catsFromActress.forEach((c) => {
+      if (allCats.includes(c)) selectedCats.add(c);
+    });
+    rerenderChips();
   }
 
   function renderActressInfo(a) {
@@ -405,22 +466,11 @@ export async function openRecordModal({ presetAt = null, editId = null } = {}) {
     if (a.born) meta.push(escapeHtml(a.born));
     if (a.relation) meta.push(escapeHtml(a.relation));
     if (a.ethnicity) meta.push(escapeHtml(a.ethnicity));
-    if (a.tags && a.tags.length) meta.push(`tags: ${a.tags.slice(0, 3).map(escapeHtml).join(', ')}`);
     const avatar = a.avatar ? `<div class="actress-info__avatar"><img src="${escapeHtml(a.avatar)}" alt="" loading="lazy"></div>` : '';
     actressInfo.innerHTML = `<div class="actress-info__row">${avatar}<div class="actress-info__meta">${meta.length ? meta.join(' · ') : 'PH sin datos detallados'}</div></div>`;
   }
 
-  async function findLocalActress(name) {
-    const lower = name.toLowerCase();
-    const all = await listActresses();
-    return (
-      all.find((a) => a.name && a.name.toLowerCase() === lower) ||
-      all.find((a) => a.name && a.name.toLowerCase().includes(lower))
-    );
-  }
-
   async function lookupActress(name) {
-    // 1. Dataset estático (PH completo, instantáneo)
     const star = getStar(name);
     if (star) {
       const slug = `slug:${slugify(name)}`;
@@ -433,16 +483,15 @@ export async function openRecordModal({ presetAt = null, editId = null } = {}) {
         url: `https://www.pornhub.com/pornstar/${slugify(name)}`,
         fetchedAt: Date.now(),
       };
-      // Fusionar con local si tiene más datos
-      const local = await findLocalActress(name);
+      const all = await listActresses();
+      const local = all.find((x) => x.name && x.name.toLowerCase() === name.toLowerCase());
       const merged = local ? { ...enriched, ...local, name: star.n } : enriched;
       renderActressInfo(merged);
       autofillFromActress(merged);
       return;
     }
-
-    // 2. Local con datos
-    const local = await findLocalActress(name);
+    const all = await listActresses();
+    const local = all.find((x) => x.name && x.name.toLowerCase() === name.toLowerCase());
     if (local && hasRealActressData(local)) {
       renderActressInfo(local);
       autofillFromActress(local);
@@ -452,8 +501,6 @@ export async function openRecordModal({ presetAt = null, editId = null } = {}) {
       renderActressInfo(local);
       return;
     }
-
-    // 3. Scraping en vivo
     let token = ++searchToken;
     actressInfo.innerHTML = `<div class="actress-info__row">Buscando en Pornhub…</div>`;
     try {
@@ -466,12 +513,8 @@ export async function openRecordModal({ presetAt = null, editId = null } = {}) {
     }
   }
 
-  // Solo hacer lookup en edit mode o si hay valor inicial
-  if (existing?.actressName) {
+  if (initialActressName) {
     setTimeout(() => actressInput.dispatchEvent(new Event('input')), 50);
-  } else if (recentActresses.length) {
-    // Auto-lookup de la reciente más común
-    setTimeout(() => actressInput.dispatchEvent(new Event('input')), 100);
   }
 
   actressInput.addEventListener('input', () => {
@@ -481,7 +524,6 @@ export async function openRecordModal({ presetAt = null, editId = null } = {}) {
       actressInfo.innerHTML = '';
       return;
     }
-    // Populate datalist with matches as user types
     const matches = searchStars(name, 30);
     actressDatalist.innerHTML = '';
     for (const s of matches) {
@@ -576,23 +618,40 @@ export async function openRecordModal({ presetAt = null, editId = null } = {}) {
   }
 }
 
-function dateToInput(ts) {
-  const d = new Date(ts);
-  const pad = (n) => n.toString().padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+// Modo simple: registra sin modal
+async function recordSimple(presetAt) {
+  const defaultDevice = await getDefaultDevice();
+  const entry = {
+    at: presetAt ?? Date.now(),
+    categories: [],
+    category: 'Sin categoría',
+    site: '',
+    actressName: '',
+    actressId: null,
+    sourceType: '',
+    device: defaultDevice,
+    lubricant: 'without',
+    notes: '',
+  };
+  await addEntry(entry);
+  toast('Registrado');
+  document.dispatchEvent(new CustomEvent('nuttracker:data-changed'));
 }
 
-function timeToInput(ts) {
-  const d = new Date(ts);
-  const pad = (n) => n.toString().padStart(2, '0');
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
-function hasRealActressData(a) {
-  if (!a) return false;
-  if (a.notFound) return false;
-  if (a.transient) return false;
-  return a.rank || a.videosCount || a.subscribers || a.born || a.height || a.weight || a.relation || a.ethnicity || a.measurements || a.avatar || (a.tags && a.tags.length);
+// Select simple sin botón "+ Añadir"
+function createSimpleSelect({ name, label, value = '', optionKey }) {
+  const wrap = document.createElement('div');
+  wrap.className = 'field';
+  wrap.innerHTML = `
+    <label>${label}</label>
+    <select name="${name}"></select>
+  `;
+  const select = wrap.querySelector('select');
+  (async () => {
+    const opts = await getOptions(optionKey);
+    select.innerHTML = `<option value="">—</option>` + opts.map((o) => `<option value="${escapeAttr(o)}" ${o === value ? 'selected' : ''}>${escapeHtml(o)}</option>`).join('');
+  })();
+  return { wrap, select };
 }
 
 export default { openRecordModal };

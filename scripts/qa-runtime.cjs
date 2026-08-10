@@ -220,6 +220,33 @@ const minLengths = {
       .find(b => b.textContent === 'Cancelar');
     if (cancelBtn) cancelBtn.click();
     await new Promise((r) => setTimeout(r, 400));
+
+    // Reopen and test edit mode + iOS toggle
+    recBtn.click();
+    await new Promise((r) => setTimeout(r, 600));
+    const lubeCheck = dom.window.document.querySelector('#lubricantCheck');
+    const iosToggle = dom.window.document.querySelector('.ios-toggle');
+    if (lubeCheck && iosToggle) {
+      console.log('   iOS toggle found, checked:', lubeCheck.checked);
+      if (!iosToggle.querySelector('.ios-toggle__track') || !iosToggle.querySelector('.ios-toggle__thumb')) {
+        failures.push('iOS toggle missing track or thumb');
+      }
+      // Click toggle to check
+      iosToggle.click();
+      await new Promise((r) => setTimeout(r, 100));
+      console.log('   after click, checked:', lubeCheck.checked);
+      if (!lubeCheck.checked) {
+        failures.push('iOS toggle did not flip');
+      }
+    } else {
+      failures.push('iOS toggle not found');
+    }
+
+    // Close
+    const cancelBtn2 = [...dom.window.document.querySelectorAll('.modal-footer button')]
+      .find(b => b.textContent === 'Cancelar');
+    if (cancelBtn2) cancelBtn2.click();
+    await new Promise((r) => setTimeout(r, 400));
   } else {
     failures.push('recordBtn not found on home');
   }
