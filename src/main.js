@@ -5,10 +5,12 @@ import { renderHome } from './screens/home.js';
 import { renderStats } from './screens/stats.js';
 import { renderCalendar } from './screens/calendar.js';
 import { renderSettings } from './screens/settings.js';
+import { loadStarsDataset } from './services/actressSearch.js';
 import { toast } from './ui/modal.js';
 
 async function bootstrap() {
   await loadTheme();
+  loadStarsDataset(); // fire-and-forget
 
   registerRoute('home', async (main) => {
     await renderHome(main);

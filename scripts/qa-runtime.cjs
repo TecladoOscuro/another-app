@@ -47,18 +47,21 @@ const dom = new JSDOM(html, {
   beforeParse(window) {
     window.indexedDB = fakeIDB.indexedDB;
     window.IDBKeyRange = fakeIDB.IDBKeyRange;
-    window.matchMedia = () => ({
-      matches: true,
-      addEventListener: () => {},
-      removeEventListener: () => {},
-    });
-    window.fetch = async () => ({ ok: false, text: async () => '' });
-    window.addEventListener('error', (e) => {
-      errors.push('window.error: ' + (e.error?.stack || e.error?.message || e.message));
-    });
-    window.addEventListener('unhandledrejection', (e) => {
-      errors.push('unhandledrejection: ' + (e.reason?.stack || e.reason?.message || e.reason));
-    });
+    window.matchMedia = () => ({ matches: true, addEventListener: () => {}, removeEventListener: () => {} });
+    // ph-stars.json loaded synchronously from disk; inject as global
+    const fsLocal = require('fs');
+    const pathLocal = require('path');
+    const starsPath = pathLocal.join(__dirname, '..', 'dist', 'ph-stars.json');
+    const starsData = JSON.parse(fsLocal.readFileSync(starsPath, 'utf8'));
+    window.__PH_STARS__ = starsData;
+    window.fetch = async (url) => {
+      if (url.includes('ph-stars.json')) {
+        return { ok: true, status: 200, json: async () => window.__PH_STARS__, text: async () => JSON.stringify(window.__PH_STARS__) };
+      }
+      return { ok: false, status: 0, text: async () => '' };
+    };
+    window.addEventListener('error', (e) => errors.push('window.error: ' + (e.error?.message || e.message)));
+    window.addEventListener('unhandledrejection', (e) => errors.push('rejection: ' + (e.reason?.message || e.reason)));
   },
 });
 
@@ -179,6 +182,16 @@ const minLengths = {
       console.log('   actress info for stored name: "' + text + '"');
       if (text.includes('Sin datos') || text.includes('No encontrada')) {
         failures.push(`actress info wrongly says no data for stored name: "${text}"`);
+      }
+
+      // Test: typing a name from the PH dataset should find it
+      aInput.value = 'Lana Rhoades';
+      aInput.dispatchEvent(new dom.window.Event('input'));
+      await new Promise((r) => setTimeout(r, 800));
+      const text2 = aInfo.textContent.trim();
+      console.log('   actress info for "Lana Rhoades": "' + text2 + '"');
+      if (!text2.includes('Lana') && !text2.includes('#1')) {
+        failures.push(`PH dataset lookup failed for "Lana Rhoades": "${text2}"`);
       }
     }
 

@@ -1,11 +1,14 @@
-import { getAllEntries, listActresses, exportAll, importAll, clearAll } from '../db.js';
+import { getAllEntries, listActresses, exportAll, importAll, clearAll, getSetting, setSetting } from '../db.js';
 import { toggleTheme, loadTheme } from '../services/theme.js';
 import { toast, confirmDialog } from '../ui/modal.js';
+import { getOptions } from '../services/options.js';
 
 export async function renderSettings(main) {
   const theme = await loadTheme();
   const entries = await getAllEntries();
   const actresses = await listActresses();
+  const defaultDevice = await getSetting('defaultDevice', 'iPad');
+  const devices = await getOptions('device');
 
   main.innerHTML = `
     <div class="screen">
@@ -15,6 +18,20 @@ export async function renderSettings(main) {
       <div class="install-hint">
         <b>Instala la app:</b> en Safari pulsa <b>Compartir</b> → <b>Añadir a pantalla de inicio</b>.
         En Android, el navegador ofrece el banner automáticamente.
+      </div>
+
+      <div class="section-head"><h3>Registro</h3></div>
+      <div class="settings-group">
+        <div class="settings-row">
+          <div>
+            <span>Dispositivo por defecto</span>
+            <small>Se selecciona automáticamente al registrar.</small>
+          </div>
+          <select id="defaultDevice" style="max-width: 140px;">
+            <option value="">— ninguno —</option>
+            ${devices.map((d) => `<option value="${d}" ${d === defaultDevice ? 'selected' : ''}>${d}</option>`).join('')}
+          </select>
+        </div>
       </div>
 
       <div class="section-head"><h3>Datos</h3></div>
@@ -51,11 +68,9 @@ export async function renderSettings(main) {
     </div>
   `;
 
-  document.getElementById('themeToggle').addEventListener('click', async () => {
-    const next = await toggleTheme();
-    const btn = document.getElementById('themeToggle');
-    btn.classList.toggle('is-on', next === 'dark');
-    toast(next === 'dark' ? 'Modo oscuro' : 'Modo claro');
+  document.getElementById('defaultDevice').addEventListener('change', async (e) => {
+    await setSetting('defaultDevice', e.target.value);
+    toast('Dispositivo por defecto guardado');
   });
 
   document.getElementById('exportBtn').addEventListener('click', async () => {
