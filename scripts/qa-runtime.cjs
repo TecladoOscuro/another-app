@@ -24,9 +24,9 @@ const html = `<!doctype html><html><body>
   <nav id="tabbar">
     <button class="tab" data-route="home">H</button>
     <button class="tab" data-route="calendar">C</button>
-    <button class="tab tab--record" data-route="record">R</button>
     <button class="tab" data-route="stats">S</button>
-    <button class="tab" data-route="settings">A</button>
+    <button class="tab" data-route="actresses">Ac</button>
+    <button class="tab" data-route="settings">Aj</button>
   </nav>
 </div>
 <div id="modalRoot"></div>
@@ -78,6 +78,7 @@ const minLengths = {
   home: 200,
   calendar: 200,
   stats: 1000,
+  actresses: 200,
   settings: 200,
 };
 
@@ -101,7 +102,7 @@ const minLengths = {
   await new Promise((r) => { tx.oncomplete = r; });
 
   const failures = [];
-  for (const t of ['home', 'stats', 'calendar', 'settings']) {
+  for (const t of ['home', 'stats', 'calendar', 'actresses', 'settings']) {
     errors.length = 0;
     const tab = dom.window.document.querySelector(`[data-route="${t}"]`);
     if (!tab) {
@@ -166,6 +167,20 @@ const minLengths = {
       console.log('   actress datalist options:', JSON.stringify(options));
       if (!options.includes('Pepita Test')) {
         failures.push(`actress datalist missing seeded: ${options}`);
+      }
+    }
+
+    // Test: typing a name and waiting for lookup should populate actressInfo
+    const aInput = dom.window.document.querySelector('#actressInput');
+    const aInfo = dom.window.document.querySelector('#actressInfo');
+    if (aInput && aInfo) {
+      aInput.value = 'Pepita Test';
+      aInput.dispatchEvent(new dom.window.Event('input'));
+      await new Promise((r) => setTimeout(r, 800));
+      const text = aInfo.textContent.trim();
+      console.log('   actress info for stored name: "' + text + '"');
+      if (text.includes('Sin datos') || text.includes('No encontrada')) {
+        failures.push(`actress info wrongly says no data for stored name: "${text}"`);
       }
     }
 

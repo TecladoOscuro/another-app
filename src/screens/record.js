@@ -316,8 +316,13 @@ export async function openRecordModal({ presetAt = null, editId = null } = {}) {
       actressInfo.innerHTML = '';
       return;
     }
-    if (a.error && !a.fetchedAt) {
-      actressInfo.innerHTML = `<div class="actress-info__row warn">Sin datos de Pornhub (${escapeHtml(a.error)}). Se guardará el nombre igualmente.</div>`;
+    if (a.transient) {
+      actressInfo.innerHTML = `<div class="actress-info__row warn">
+        <div>
+          <strong>No se pudo conectar con Pornhub</strong><br>
+          <small>El proxy CORS está bloqueado o no hay red. Se guardará como nombre manual. Para datos automáticos, prueba a abrir esta app en un navegador con extensión CORS (Allow CORS) o desde la app instalada en iPhone (que sí puede).</small>
+        </div>
+      </div>`;
       return;
     }
     if (a.notFound && !hasRealActressData(a)) {
@@ -339,6 +344,9 @@ export async function openRecordModal({ presetAt = null, editId = null } = {}) {
     if (a.ethnicity) meta.push(escapeHtml(a.ethnicity));
     if (a.measurements) meta.push(escapeHtml(a.measurements));
     rows.push(`<div class="actress-info__meta">${meta.length ? meta.join(' · ') : 'PH sin datos detallados'}</div>`);
+    if (a.url) {
+      rows.push(`<a href="${escapeHtml(a.url)}" target="_blank" rel="noopener" class="actress-info__link">Ver en Pornhub ↗</a>`);
+    }
     actressInfo.innerHTML = `<div class="actress-info__row">${rows.join('')}</div>`;
   }
 
@@ -358,6 +366,12 @@ export async function openRecordModal({ presetAt = null, editId = null } = {}) {
       autofillFromActress(local);
       return;
     }
+    // If we have a stored "not found" record, show it; otherwise fetch.
+    if (local && local.notFound) {
+      renderActressInfo(local);
+      autofillFromActress(local);
+      return;
+    }
     let token = ++searchToken;
     actressInfo.innerHTML = `<div class="actress-info__row">Buscando en Pornhub…</div>`;
     try {
@@ -366,7 +380,7 @@ export async function openRecordModal({ presetAt = null, editId = null } = {}) {
       renderActressInfo(a);
       autofillFromActress(a);
     } catch (err) {
-      actressInfo.innerHTML = `<div class="actress-info__row warn">Error de red: ${escapeHtml(err.message)}</div>`;
+      actressInfo.innerHTML = `<div class="actress-info__row warn">Error: ${escapeHtml(err.message || 'desconocido')}</div>`;
     }
   }
 
@@ -468,6 +482,8 @@ export async function openRecordModal({ presetAt = null, editId = null } = {}) {
 
 function hasRealActressData(a) {
   if (!a) return false;
+  if (a.notFound) return false;
+  if (a.transient) return false;
   return a.rank || a.videosCount || a.subscribers || a.born || a.height || a.weight || a.relation || a.ethnicity || a.measurements || a.avatar;
 }
 

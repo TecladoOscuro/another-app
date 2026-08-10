@@ -59,6 +59,14 @@ function looksLikeNotFound(html) {
   );
 }
 
+function looksLikeCorsError(html) {
+  return (
+    /server-side requests are not allowed/i.test(html) ||
+    /"error"\s*:/i.test(html.slice(0, 500)) ||
+    /^<\?xml/i.test(html.trim())
+  );
+}
+
 function extractFromHtml(html, name) {
   const out = {
     name,
@@ -150,7 +158,7 @@ export async function fetchActress(name, { force = false } = {}) {
   const trimmed = String(name || '').trim();
   const slug = slugify(trimmed);
   if (!slug) {
-    return { name: trimmed, id: '', source: 'manual', fetchedAt: 0, error: 'Vacío' };
+    return { name: trimmed, id: '', source: 'manual', fetchedAt: 0, error: 'Nombre vacío' };
   }
 
   const stored = await getActressByName(trimmed);
@@ -171,15 +179,30 @@ export async function fetchActress(name, { force = false } = {}) {
   const promise = (async () => {
     try {
       const html = await fetchOnce(target);
-      if (looksLikeNotFound(html)) {
-        const data = stored ? { ...stored, notFound: true, fetchedAt: Date.now() } : {
-          id: `slug:${slug}`,
+      if (looksLikeCorsError(html)) {
+        const transient = {
+          id: stored?.id || `slug:${slug}`,
           name: trimmed,
           source: 'pornhub',
           url: target,
-          fetchedAt: Date.now(),
-          notFound: true,
+          fetchedAt: 0,
+          transient: true,
+          error: 'Proxy CORS no disponible',
         };
+        cache.set(slug, transient);
+        return transient;
+      }
+      if (looksLikeNotFound(html)) {
+        const data = stored
+          ? { ...stored, notFound: true, fetchedAt: Date.now() }
+          : {
+              id: `slug:${slug}`,
+              name: trimmed,
+              source: 'pornhub',
+              url: target,
+              fetchedAt: Date.now(),
+              notFound: true,
+            };
         await upsertActress(data);
         cache.set(slug, data);
         return data;
@@ -188,7 +211,10 @@ export async function fetchActress(name, { force = false } = {}) {
       const isEmpty = !hasRealData(data);
       if (isEmpty) {
         data.notFound = true;
-        if (stored) Object.assign(data, { id: stored.id, url: stored.url });
+        if (stored) {
+          data.id = stored.id;
+          data.url = stored.url;
+        }
       }
       await upsertActress(data);
       cache.set(slug, data);
@@ -198,19 +224,19 @@ export async function fetchActress(name, { force = false } = {}) {
         cache.set(slug, stored);
         return stored;
       }
-      const data = stored
-        ? { ...stored, error: err.message, fetchedAt: 0 }
-        : {
-            id: `slug:${slug}`,
-            name: trimmed,
-            source: 'pornhub',
-            url: target,
-            fetchedAt: 0,
-            error: err.message,
-            notFound: true,
-          };
-      cache.set(slug, data);
-      return data;
+      // Network failure: do NOT persist a fake "not found" record.
+      // Surface a transient error so the caller can re-try.
+      const transient = {
+        id: stored?.id || `slug:${slug}`,
+        name: trimmed,
+        source: 'pornhub',
+        url: target,
+        fetchedAt: 0,
+        transient: true,
+        error: err.message || 'Error de red',
+      };
+      cache.set(slug, transient);
+      return transient;
     } finally {
       inflight.delete(slug);
     }
