@@ -22,10 +22,17 @@ export async function renderSettings(main) {
 
       <div class="section-head"><h3>Registro</h3></div>
       <div class="settings-group">
+        <div class="switch-row">
+          <div>
+            <span>Modo simple</span>
+            <small>El botón del inicio registra directo sin abrir nada.</small>
+          </div>
+          <button class="toggle ${(await getSetting('simpleMode', false)) ? 'is-on' : ''}" id="simpleModeToggle" aria-label="Modo simple"></button>
+        </div>
         <div class="settings-row">
           <div>
             <span>Dispositivo por defecto</span>
-            <small>Se selecciona automáticamente al registrar.</small>
+            <small>Se usa en modo simple y al abrir el modal.</small>
           </div>
           <select id="defaultDevice" style="max-width: 140px;">
             <option value="">— ninguno —</option>
@@ -71,6 +78,13 @@ export async function renderSettings(main) {
   document.getElementById('defaultDevice').addEventListener('change', async (e) => {
     await setSetting('defaultDevice', e.target.value);
     toast('Dispositivo por defecto guardado');
+  });
+
+  document.getElementById('simpleModeToggle').addEventListener('click', async () => {
+    const current = await getSetting('simpleMode', false);
+    await setSetting('simpleMode', !current);
+    document.getElementById('simpleModeToggle').classList.toggle('is-on', !current);
+    toast(!current ? 'Modo simple activado' : 'Modo normal');
   });
 
   document.getElementById('exportBtn').addEventListener('click', async () => {

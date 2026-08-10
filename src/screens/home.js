@@ -1,4 +1,4 @@
-import { getAllEntries } from '../db.js';
+import { getAllEntries, getSetting } from '../db.js';
 import { entriesToday, totals, entriesThisMonth, yearReport, streakDays, uniqueActresses, avgDuration, hourlyDistribution } from '../services/analytics.js';
 import { formatTime, formatBigNumber } from '../services/date.js';
 import { escapeHtml } from '../services/html.js';
@@ -6,6 +6,7 @@ import { openRecordModal } from './record.js';
 
 export async function renderHome(main) {
   const entries = await getAllEntries();
+  const simpleMode = await getSetting('simpleMode', false);
   const today = entriesToday(entries);
   const month = entriesThisMonth(entries);
   const t = totals(entries);
@@ -23,12 +24,12 @@ export async function renderHome(main) {
     <div class="screen">
       <p class="muted" style="margin-top: 8px;">${greeting},</p>
       <h2>¿Otra vez?</h2>
-      <p class="muted">Toca el botón para registrar este momento.</p>
+      <p class="muted">${simpleMode ? 'Modo simple: un toque y listo.' : 'Toca el botón para registrar con detalles.'}</p>
 
       <div class="record-hero">
         <button class="record-btn" id="recordBtn" aria-label="Registrar ahora">
           <span class="record-btn__label">
-            <small>Registrar</small>
+            <small>${simpleMode ? 'Registrar' : 'Registrar'}</small>
             YA
           </span>
         </button>
@@ -100,7 +101,13 @@ export async function renderHome(main) {
     </div>
   `;
 
-  document.getElementById('recordBtn').addEventListener('click', openRecordModal);
+  document.getElementById('recordBtn').addEventListener('click', () => {
+    if (simpleMode) {
+      openRecordModal({ simple: true });
+    } else {
+      openRecordModal();
+    }
+  });
 }
 
 function mostActiveHourLabel(entries) {
