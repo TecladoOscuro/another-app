@@ -166,7 +166,7 @@ a {
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
-  padding-bottom: 80px;
+  padding-bottom: calc(54px + env(safe-area-inset-bottom, 0px));
   scroll-behavior: smooth;
 }
 
@@ -184,6 +184,8 @@ a {
   -webkit-backdrop-filter: saturate(180%) blur(28px);
   border-top: 1px solid var(--tabbar-border);
   min-height: 50px;
+  height: calc(50px + var(--safe-bottom));
+  box-sizing: border-box;
 }
 
 .tab {
@@ -700,7 +702,7 @@ a {
 /* ---- Stats screen layout (mobile-first) ---- */
 
 .stats-screen {
-  padding-bottom: 80px;
+  padding-bottom: 56px;
 }
 
 .stats-header {
@@ -1555,7 +1557,7 @@ a {
 /* ---- Home screen ---- */
 
 .home-screen {
-  padding-bottom: 80px;
+  padding-bottom: 56px;
 }
 
 .home-stats {
