@@ -73,8 +73,8 @@ export function getStar(name) {
   if (!base) return null;
   const enriched = enrichedIndex?.get(name.toLowerCase());
   if (!enriched) return base;
-  // Merge base + enriched
-  return { ...base, ...enriched, n: base.n, r: base.r, b: base.b };
+  // Merge enriched on top of base, preserving identity fields
+  return { ...base, ...enriched, n: base.n, r: base.r || enriched.r, b: base.b || enriched.b, slug: base.slug || enriched.slug };
 }
 
 export async function findOrCreateActress(name) {

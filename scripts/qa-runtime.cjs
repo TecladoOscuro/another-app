@@ -189,11 +189,24 @@ const minLengths = {
       // Test: typing a name from the PH dataset should find it
       aInput.value = 'Lana Rhoades';
       aInput.dispatchEvent(new dom.window.Event('input'));
-      await new Promise((r) => setTimeout(r, 800));
+      await new Promise((r) => setTimeout(r, 1500));
       const text2 = aInfo.textContent.trim();
-      console.log('   actress info for "Lana Rhoades": "' + text2 + '"');
+      console.log('   actress info for "Lana Rhoades": "' + text2.replace(/\n/g, ' ').slice(0, 200) + '"');
       if (!text2.includes('Lana') && !text2.includes('#1')) {
         failures.push(`PH dataset lookup failed for "Lana Rhoades": "${text2}"`);
+      }
+
+      // Test: typing Alexis Texas should find Blonde + MILF categories
+      aInput.value = 'Alexis Texas';
+      aInput.dispatchEvent(new dom.window.Event('input'));
+      await new Promise((r) => setTimeout(r, 2000));
+      const text3 = aInfo.textContent.replace(/\s+/g, ' ').trim();
+      console.log('   actress info for "Alexis Texas": "' + text3.slice(0, 250) + '"');
+      if (!text3.includes('Blonde')) {
+        failures.push(`Alexis Texas should show "Blonde" auto-category: "${text3}"`);
+      }
+      if (!text3.includes('MILF')) {
+        failures.push(`Alexis Texas should show "MILF" auto-category: "${text3}"`);
       }
 
       // Test: stats display name (not slug) — Mia ya está sembrada en el seed inicial

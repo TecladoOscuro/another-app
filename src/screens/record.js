@@ -72,6 +72,24 @@ function hasRealActressData(a) {
   return a.rank || a.videosCount || a.subscribers || a.born || a.height || a.weight || a.relation || a.ethnicity || a.measurements || a.avatar || (a.tags && a.tags.length);
 }
 
+function parseHeight(s) {
+  if (!s) return null;
+  const m = String(s).match(/(\d+)\s*cm/i);
+  if (m) return `${m[1]} cm`;
+  const n = parseInt(s, 10);
+  if (n > 50 && n < 250) return `${n} cm`;
+  return null;
+}
+
+function parseWeight(s) {
+  if (!s) return null;
+  const m = String(s).match(/(\d+)\s*kg/i);
+  if (m) return `${m[1]} kg`;
+  const n = parseInt(s, 10);
+  if (n > 30 && n < 200) return `${n} kg`;
+  return null;
+}
+
 function guessCategoriesFromActress(a) {
   const cats = new Set();
   if (!a) return cats;
@@ -169,7 +187,7 @@ export async function openRecordModal({ presetAt = null, editId = null, simple =
   const initialActressName = existing?.actressName || '';
   const body = document.createElement('div');
   body.innerHTML = `
-    <form id="recordForm" autocomplete="off">
+    <form id="recordForm" autocomplete="off" tabindex="-1">
 
       <div class="record-section">
         <div class="field">
@@ -228,13 +246,15 @@ export async function openRecordModal({ presetAt = null, editId = null, simple =
       ${
         existing
           ? `<div class="record-section">
-            <div class="field">
-              <label>Fecha</label>
-              <input type="date" name="date" value="${escapeAttr(dateToInput(existing.at))}" required />
-            </div>
-            <div class="field" style="margin-top: 10px;">
-              <label>Hora</label>
-              <input type="time" name="time" value="${escapeAttr(timeToInput(existing.at))}" required />
+            <div class="field-row">
+              <div class="field">
+                <label>Fecha</label>
+                <input type="date" name="date" value="${escapeAttr(dateToInput(existing.at))}" required />
+              </div>
+              <div class="field">
+                <label>Hora</label>
+                <input type="time" name="time" value="${escapeAttr(timeToInput(existing.at))}" required />
+              </div>
             </div>
           </div>`
           : ''
@@ -508,10 +528,17 @@ export async function openRecordModal({ presetAt = null, editId = null, simple =
     renderDropdown(combined.slice(0, 8), q);
   }
 
-  actressInput.addEventListener('focus', () => updateDropdown(actressInput.value));
+  actressInput.addEventListener('focus', () => {
+    // Solo abre el dropdown si el usuario tocó el campo (no en autofocus inicial)
+    if (document.activeElement === actressInput) {
+      updateDropdown(actressInput.value);
+    }
+  });
   actressInput.addEventListener('blur', () => {
     setTimeout(closeDropdown, 150);
   });
+  // Click en el input: abre el dropdown
+  actressInput.addEventListener('click', () => updateDropdown(actressInput.value));
 
   let lastInput = '';
   actressInput.addEventListener('input', () => {
@@ -610,11 +637,13 @@ export async function openRecordModal({ presetAt = null, editId = null, simple =
     }
     const meta = [];
     if (a.rank) meta.push(`#${escapeHtml(a.rank)}`);
-    if (a.videosCount) meta.push(`${formatBigNumber(a.videosCount)} vídeos`);
-    if (a.subscribers) meta.push(`${formatBigNumber(a.subscribers)} subs`);
+    if (a.ethnicity) meta.push(escapeHtml(a.ethnicity));
+    if (a.hair) meta.push(`Cabello: ${escapeHtml(a.hair)}`);
+    if (a.height) meta.push(escapeHtml(a.height));
+    if (a.weight) meta.push(escapeHtml(a.weight));
+    if (a.bust && a.cup) meta.push(`Busto: ${escapeHtml(a.bust)}${escapeHtml(a.cup)}`);
     if (a.born) meta.push(escapeHtml(a.born));
     if (a.relation) meta.push(escapeHtml(a.relation));
-    if (a.ethnicity) meta.push(escapeHtml(a.ethnicity));
     const avatar = a.avatar ? `<div class="actress-info__avatar"><img src="${escapeHtml(a.avatar)}" alt="" loading="lazy"></div>` : '';
     const autoCats = [...guessCategoriesFromActress(a)];
     const autoCatsHtml = autoCats.length
@@ -640,12 +669,27 @@ export async function openRecordModal({ presetAt = null, editId = null, simple =
         source: 'ph-dataset',
         rank: star.r || null,
         born: star.b || null,
+        ethnicity: star.ethnicity || null,
+        hair: star.hair || null,
+        eyes: star.eyes || null,
+        cup: star.cup || null,
+        bust: star.bust || null,
+        waist: star.waist || null,
+        hip: star.hip || null,
+        height: parseHeight(star.height) || null,
+        weight: parseWeight(star.weight) || null,
+        tags: star.tags || [],
         url: `https://www.pornhub.com/pornstar/${slugify(name)}`,
         fetchedAt: Date.now(),
       };
-      const merged = local ? { ...enriched, ...local, name: star.n } : enriched;
+      // Merge: local gana (más reciente), pero empezamos con enriched
+      const merged = local ? { ...enriched, ...local, name: star.n, id: local.id || enriched.id } : enriched;
       renderActressInfo(merged);
       autofillFromActress(merged);
+      // Persistir lo que tenemos del dataset para próximas veces
+      if (!local) {
+        await upsertActress(merged);
+      }
       return;
     }
 
