@@ -1,4 +1,4 @@
-import { startOfDay, addDays, endOfMonth, startOfMonth, isoWeek, todayKey } from './date.js';
+import { startOfDay, addDays, isoWeek } from './date.js';
 
 export function totalsBy(entries, keyFn) {
   const map = new Map();
@@ -9,6 +9,8 @@ export function totalsBy(entries, keyFn) {
   }
   return map;
 }
+
+export { formatBigNumber } from './date.js';
 
 export function topN(map, n = 10) {
   return [...map.entries()].sort((a, b) => b[1] - a[1]).slice(0, n);
@@ -194,5 +196,3 @@ export function weeklySeries(entries, weeks = 12, anchorTs = Date.now()) {
   }
   return map;
 }
-
-export { formatBigNumber } from './date.js';

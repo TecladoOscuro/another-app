@@ -1,12 +1,15 @@
 import { getAllEntries, deleteEntry } from '../db.js';
 import {
   WEEKDAYS_ES,
+  MONTHS_SHORT,
   daysInMonth,
   formatTime,
+  formatDurationShort,
   monthLabel,
   pad2,
   startOfDay,
 } from '../services/date.js';
+import { escapeHtml } from '../services/html.js';
 import { openRecordModal } from './record.js';
 import { toast, confirmDialog } from '../ui/modal.js';
 
@@ -125,7 +128,7 @@ async function renderDayDetail(main, entriesByDay) {
   const sorted = [...list].sort((a, b) => a.at - b.at);
   const detail = document.getElementById('dayDetail');
   const dateObj = new Date(selectedDay);
-  const dateLabel = `${pad2(dateObj.getDate())} ${MONTHS_SHORT_ES[dateObj.getMonth()]} ${dateObj.getFullYear()}`;
+  const dateLabel = `${pad2(dateObj.getDate())} ${MONTHS_SHORT[dateObj.getMonth()]} ${dateObj.getFullYear()}`;
 
   detail.innerHTML = `
     <div class="section-head">
@@ -140,15 +143,15 @@ async function renderDayDetail(main, entriesByDay) {
             <div class="entry-item" data-id="${e.id}">
               <div class="entry-item__time">${formatTime(e.at)}</div>
               <div class="entry-item__title">
-                <strong>${escape(e.category || 'Sin categoría')}</strong>
+                <strong>${escapeHtml(e.category || 'Sin categoría')}</strong>
                 <small>
-                  ${escape(e.actressName || '')}
-                  ${e.sourceType ? ` · <span class="site-badge">${escape(e.sourceType)}</span>` : ''}
-                  ${e.site ? ` · <span class="site-badge">${escape(e.site)}</span>` : ''}
-                  ${e.device ? ` · <span class="site-badge">${escape(e.device)}</span>` : ''}
+                  ${escapeHtml(e.actressName || '')}
+                  ${e.sourceType ? ` · <span class="site-badge">${escapeHtml(e.sourceType)}</span>` : ''}
+                  ${e.site ? ` · <span class="site-badge">${escapeHtml(e.site)}</span>` : ''}
+                  ${e.device ? ` · <span class="site-badge">${escapeHtml(e.device)}</span>` : ''}
                   ${e.lubricant === 'with' ? ` · <span class="site-badge">con lube</span>` : ''}
                   ${e.lubricant === 'without' ? ` · <span class="site-badge">sin lube</span>` : ''}
-                  ${e.duration ? ` · ${formatDurationLocal(e.duration)}` : ''}
+                  ${e.duration ? ` · ${formatDurationShort(e.duration)}` : ''}
                 </small>
               </div>
               <button class="entry-item__del" data-action="edit" data-id="${e.id}">Editar</button>
@@ -185,39 +188,6 @@ async function renderDayDetail(main, entriesByDay) {
       openRecordModal({ editId: Number(btn.dataset.id) });
     });
   });
-}
-
-const MONTHS_SHORT_ES = [
-  'ene',
-  'feb',
-  'mar',
-  'abr',
-  'may',
-  'jun',
-  'jul',
-  'ago',
-  'sep',
-  'oct',
-  'nov',
-  'dic',
-];
-
-function formatDurationLocal(s) {
-  if (!s) return '';
-  const m = Math.floor(s / 60);
-  const sec = s % 60;
-  if (m === 0) return `${sec}s`;
-  return `${m}m`;
-}
-
-function escape(s) {
-  return String(s || '').replace(/[&<>"']/g, (c) => ({
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#39;',
-  })[c]);
 }
 
 function refresh(main) {

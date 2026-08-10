@@ -4,16 +4,15 @@ import {
   getEntry,
   deleteEntry,
   getActressByName,
-  getActress,
   upsertActress,
 } from '../db.js';
-import { PH_CATEGORIES, PH_SITES, SOURCE_TYPES, DEVICES, LUBRICANT_OPTIONS } from '../data/categories.js';
+import { PH_CATEGORIES, PH_SITES, SOURCE_TYPES, LUBRICANT_OPTIONS } from '../data/categories.js';
 import { fetchActress, slugify } from '../services/scraper.js';
 import { formatBigNumber } from '../services/date.js';
 import { fromDateTimeInputs, toDateInput, toTimeInput } from '../services/date.js';
+import { escapeHtml, escapeAttr } from '../services/html.js';
 import { openModal, toast } from '../ui/modal.js';
 import { createSelectWithAdd } from '../ui/selectWithAdd.js';
-import { getOptions } from '../services/options.js';
 
 const RECENT_CAT_KEY = 'recentCategories';
 
@@ -204,11 +203,16 @@ export async function openRecordModal({ presetAt = null, editId = null } = {}) {
   });
 
   let searchToken = 0;
+  let typingTimer;
+  const abortLookup = () => {
+    if (typingTimer) clearTimeout(typingTimer);
+    typingTimer = null;
+    searchToken++;
+  };
   const actressInput = body.querySelector('#actressInput');
   const actressInfo = body.querySelector('#actressInfo');
   const catInput = body.querySelector('#catInput');
   const siteSel = siteSelect.select;
-  let typingTimer;
 
   function autofillFromActress(a) {
     if (!a) return;
@@ -227,9 +231,6 @@ export async function openRecordModal({ presetAt = null, editId = null } = {}) {
     const stored = await getActressByName(name);
     if (stored) {
       autofillFromActress(stored);
-      if (stored.notes) {
-        const src = stored.notes;
-      }
     }
     let token = ++searchToken;
     try {
@@ -270,7 +271,10 @@ export async function openRecordModal({ presetAt = null, editId = null } = {}) {
     actressInput.dispatchEvent(new Event('input'));
   }
 
-  cancel.addEventListener('click', () => m.close());
+  cancel.addEventListener('click', () => {
+    abortLookup();
+    m.close();
+  });
   save.addEventListener('click', async () => {
     const form = body.querySelector('#recordForm');
     const fd = new FormData(form);
@@ -363,20 +367,6 @@ function guessCategoriesFromActress(a) {
   if (a.videosCount && a.videosCount > 500) tags.push('Pornstar');
   if (a.rank && parseInt(a.rank, 10) <= 100) tags.push('Pornstar');
   return tags;
-}
-
-function escapeHtml(s) {
-  return String(s || '').replace(/[&<>"']/g, (c) => ({
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#39;',
-  })[c]);
-}
-
-function escapeAttr(s) {
-  return escapeHtml(s);
 }
 
 export default { openRecordModal };

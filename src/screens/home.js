@@ -1,6 +1,7 @@
 import { getAllEntries } from '../db.js';
 import { entriesToday, totals, entriesThisMonth, yearReport, streakDays, uniqueActresses, avgDuration, hourlyDistribution } from '../services/analytics.js';
 import { formatTime, formatBigNumber } from '../services/date.js';
+import { escapeHtml } from '../services/html.js';
 import { openRecordModal } from './record.js';
 
 export async function renderHome(main) {
@@ -69,11 +70,11 @@ export async function renderHome(main) {
                   (e) => `
                 <div class="list-item">
                   <div class="list-item__title">
-                    ${escape(e.category || 'Sin categoría')}
+                    ${escapeHtml(e.category || 'Sin categoría')}
                     <div class="list-item__sub">
-                      ${escape(e.actressName || e.site || '—')} · ${formatTime(e.at)}
-                      ${e.sourceType ? ` · <span class="site-badge">${escape(e.sourceType)}</span>` : ''}
-                      ${e.device ? ` · <span class="site-badge">${escape(e.device)}</span>` : ''}
+                      ${escapeHtml(e.actressName || e.site || '—')} · ${formatTime(e.at)}
+                      ${e.sourceType ? ` · <span class="site-badge">${escapeHtml(e.sourceType)}</span>` : ''}
+                      ${e.device ? ` · <span class="site-badge">${escapeHtml(e.device)}</span>` : ''}
                     </div>
                   </div>
                 </div>`,
@@ -112,16 +113,6 @@ function mostActiveHourLabel(entries) {
 
 function pad2(n) {
   return n.toString().padStart(2, '0');
-}
-
-function escape(s) {
-  return String(s || '').replace(/[&<>"']/g, (c) => ({
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#39;',
-  })[c]);
 }
 
 export default { renderHome };

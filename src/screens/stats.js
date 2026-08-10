@@ -13,12 +13,13 @@ import {
   avgDuration,
   weeklySeries,
 } from '../services/analytics.js';
-import { MONTHS_SHORT, MONTHS_ES, WEEKDAYS_ES, startOfMonth, endOfMonth, addDays, startOfDay } from '../services/date.js';
-import { formatBigNumber, formatDuration } from '../services/date.js';
+import { MONTHS_SHORT, MONTHS_ES, WEEKDAYS_ES, addDays, startOfDay, pad2 } from '../services/date.js';
+import { formatDuration } from '../services/date.js';
+import { escapeHtml } from '../services/html.js';
 
 const FILTERS = {
   all: { label: 'Todo' },
-  today: { label: 'Hoy', from: () => startOfDay(Date.now()), to: () => startOfDay(Date.now()) + 86400000 },
+  today: { label: 'Hoy', from: () => startOfDay(Date.now()), to: () => addDays(startOfDay(Date.now()), 1) },
   '7d': { label: '7 días', from: () => addDays(startOfDay(Date.now()), -6), to: () => addDays(startOfDay(Date.now()), 1) },
   '30d': { label: '30 días', from: () => addDays(startOfDay(Date.now()), -29), to: () => addDays(startOfDay(Date.now()), 1) },
   '3m': { label: '3 meses', from: () => addDays(startOfDay(Date.now()), -89), to: () => addDays(startOfDay(Date.now()), 1) },
@@ -158,8 +159,8 @@ export async function renderStats(main) {
           <div class="insight-card__label">Wrapped ${year}</div>
           <div class="insight-card__value">${report.summary.count} registros</div>
           <div class="insight-card__hint">
-            ${report.byCategory[0] ? `Top categoría: <b>${escape(report.byCategory[0][0])}</b>` : ''}
-            ${report.byActress[0] ? ` · Top actriz: <b>${escape(report.byActress[0][0])}</b>` : ''}
+            ${report.byCategory[0] ? `Top categoría: <b>${escapeHtml(report.byCategory[0][0])}</b>` : ''}
+            ${report.byActress[0] ? ` · Top actriz: <b>${escapeHtml(report.byActress[0][0])}</b>` : ''}
           </div>
         </div>
       `
@@ -263,9 +264,9 @@ export async function renderStats(main) {
                     const initial = name[0] ? name[0].toUpperCase() : '?';
                     return `
                   <div class="actress-card">
-                    <div class="actress-card__avatar">${a && a.avatar ? `<img src="${a.avatar}" alt="" loading="lazy">` : escape(initial)}</div>
+                    <div class="actress-card__avatar">${a && a.avatar ? `<img src="${a.avatar}" alt="" loading="lazy">` : escapeHtml(initial)}</div>
                     <div class="actress-card__info">
-                      <div class="actress-card__name">${escape(name)}</div>
+                      <div class="actress-card__name">${escapeHtml(name)}</div>
                       <div class="actress-card__meta">${count} ${count === 1 ? 'vez' : 'veces'}</div>
                     </div>
                   </div>`;
@@ -342,7 +343,7 @@ export async function renderStats(main) {
                <p>Tu hora pico: <b>${pad2(report.peakHour)}:00</b>.</p>
                ${
                  report.byActress[0]
-                   ? `<p>Actriz del año: <b>${escape(report.byActress[0][0])}</b> con ${report.byActress[0][1]} registros.</p>`
+                   ? `<p>Actriz del año: <b>${escapeHtml(report.byActress[0][0])}</b> con ${report.byActress[0][1]} registros.</p>`
                    : ''
                }
                <p class="muted">Datos del periodo filtrado.</p>`
@@ -458,7 +459,7 @@ function barsHtml(arr) {
       const pct = Math.round((v / max) * 100);
       return `
         <div class="bar">
-          <span class="bar__label">${escape(label)}</span>
+          <span class="bar__label">${escapeHtml(label)}</span>
           <span class="bar__track"><span class="bar__fill" style="width: ${pct}%"></span></span>
           <span class="bar__value">${v}</span>
         </div>`;
@@ -466,26 +467,8 @@ function barsHtml(arr) {
     .join('');
 }
 
-function pad2(n) {
-  return n.toString().padStart(2, '0');
-}
-
-function escape(s) {
-  return String(s || '').replace(/[&<>"']/g, (c) => ({
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#39;',
-  })[c]);
-}
-
-function escapeHtml(s) {
-  return escape(s);
-}
-
 function escapeAttr(s) {
-  return escape(s);
+  return escapeHtml(s);
 }
 
 export function resetStatsFilter() {

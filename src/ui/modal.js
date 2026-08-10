@@ -2,6 +2,7 @@ const modalRoot = () => document.getElementById('modalRoot');
 const toastRoot = () => document.getElementById('toastRoot');
 
 let activeBackdropClick = null;
+let activeClose = null;
 
 export function openModal({ title, body, footer, onClose, dismissible = true }) {
   const root = modalRoot();
@@ -56,6 +57,7 @@ export function openModal({ title, body, footer, onClose, dismissible = true }) 
       backdrop.removeEventListener('click', activeBackdropClick);
       activeBackdropClick = null;
     }
+    if (activeClose === close) activeClose = null;
     setTimeout(() => {
       if (!root.classList.contains('is-open')) root.innerHTML = '';
     }, 300);
@@ -74,6 +76,7 @@ export function openModal({ title, body, footer, onClose, dismissible = true }) 
   if (activeBackdropClick) backdrop.addEventListener('click', activeBackdropClick);
   closeBtn.addEventListener('click', close);
   document.addEventListener('keydown', onKey);
+  activeClose = close;
 
   attachSwipeToClose(sheet, close);
 
@@ -81,6 +84,10 @@ export function openModal({ title, body, footer, onClose, dismissible = true }) 
 }
 
 export function closeModal() {
+  if (activeClose) {
+    activeClose();
+    return;
+  }
   const root = modalRoot();
   if (!root.classList.contains('is-open')) return;
   root.classList.remove('is-open');
