@@ -207,7 +207,7 @@ const minLengths = {
       const statsTab = dom.window.document.querySelector('[data-route="stats"]');
       statsTab.click();
       await new Promise((r) => setTimeout(r, 1500));
-      const actressNamesInStats = [...dom.window.document.querySelectorAll('.actress-card__name')].map(e => e.textContent);
+      const actressNamesInStats = [...dom.window.document.querySelectorAll('.actress-row__name')].map(e => e.textContent);
       console.log('   stats actress names:', JSON.stringify(actressNamesInStats));
       if (actressNamesInStats.some(n => n === 'slug:mia-malkova' || /^slug:/.test(n))) {
         failures.push(`stats shows raw slug: ${actressNamesInStats}`);

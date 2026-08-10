@@ -134,17 +134,60 @@ function attachSwipeToClose(sheet, close) {
   );
 }
 
-export function toast(message, { duration = 2200 } = {}) {
+export function toast(message, { duration = 2400, type = 'default' } = {}) {
   const root = toastRoot();
   const el = document.createElement('div');
-  el.className = 'toast';
+  el.className = 'toast' + (type === 'default' ? '' : ` is-${type}`);
   el.textContent = message;
   root.appendChild(el);
+
+  let startX = 0;
+  let currentX = 0;
+  let dragging = false;
+  let dismissed = false;
+
+  const onStart = (e) => {
+    if (dismissed) return;
+    dragging = true;
+    startX = e.touches[0].clientX;
+    el.style.transition = 'none';
+  };
+  const onMove = (e) => {
+    if (!dragging || dismissed) return;
+    currentX = e.touches[0].clientX - startX;
+    const absX = Math.abs(currentX);
+    const ratio = Math.min(1, absX / 120);
+    el.style.transform = `translateX(${currentX}px)`;
+    el.style.opacity = String(1 - ratio * 0.6);
+  };
+  const onEnd = () => {
+    if (!dragging || dismissed) return;
+    dragging = false;
+    el.style.transition = '';
+    if (Math.abs(currentX) > 100) {
+      dismissed = true;
+      el.classList.add('is-leaving');
+      const dir = currentX > 0 ? 1 : -1;
+      el.style.transform = `translateX(${dir * 400}px)`;
+      el.style.opacity = '0';
+      setTimeout(() => el.remove(), 240);
+    } else {
+      el.style.transform = '';
+      el.style.opacity = '';
+    }
+    currentX = 0;
+  };
+  el.addEventListener('touchstart', onStart, { passive: true });
+  el.addEventListener('touchmove', onMove, { passive: true });
+  el.addEventListener('touchend', onEnd, { passive: true });
+
   setTimeout(() => {
-    el.style.transition = 'opacity 200ms, transform 200ms';
+    if (dismissed) return;
+    dismissed = true;
+    el.classList.add('is-leaving');
+    el.style.transform = 'translateY(-30px)';
     el.style.opacity = '0';
-    el.style.transform = 'translateY(-10px)';
-    setTimeout(() => el.remove(), 220);
+    setTimeout(() => el.remove(), 240);
   }, duration);
 }
 

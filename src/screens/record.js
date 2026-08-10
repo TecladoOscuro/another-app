@@ -150,17 +150,19 @@ export async function openRecordModal({ presetAt = null, editId = null, simple =
       <div class="record-section">
         <div class="field">
           <label>Persona / actriz</label>
-          <div class="search">
+          <div class="actress-picker">
             <input
               type="text"
               id="actressInput"
               name="actressName"
               placeholder="Escribe o elige reciente"
-              list="actressList"
               autocomplete="off"
+              autocorrect="off"
+              autocapitalize="off"
+              spellcheck="false"
               value="${escapeAttr(initialActressName)}"
             />
-            <datalist id="actressList"></datalist>
+            <div class="actress-dropdown" id="actressDropdown" hidden></div>
           </div>
           ${
             recentActresses.length && !initialActressName
@@ -386,34 +388,140 @@ export async function openRecordModal({ presetAt = null, editId = null, simple =
   });
   catSearchInput.addEventListener('input', () => renderCatPickerList(catSearchInput.value));
 
-  // ---- Datalist actrices ----
-  const actressDatalist = body.querySelector('#actressList');
-  try {
-    const storedActresses = await listActresses();
-    const storedNames = new Set();
-    storedActresses
-      .filter((a) => a && a.name)
-      .sort((a, b) => a.name.localeCompare(b.name))
-      .forEach((a) => {
-        if (storedNames.has(a.name.toLowerCase())) return;
-        storedNames.add(a.name.toLowerCase());
-        const opt = document.createElement('option');
-        opt.value = a.name;
-        actressDatalist.appendChild(opt);
+  // ---- Actress input reference (must be defined before dropdown wiring) ----
+  const actressInput = body.querySelector('#actressInput');
+
+  // ---- Actress dropdown ----
+  const actressDropdown = body.querySelector('#actressDropdown');
+  let dropdownItems = [];
+
+  function renderDropdown(matches, query) {
+    actressDropdown.innerHTML = '';
+    if (!matches.length) {
+      actressDropdown.hidden = true;
+      return;
+    }
+    matches.slice(0, 8).forEach((name, i) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'actress-dropdown__item';
+      btn.dataset.name = name;
+      const lower = name.toLowerCase();
+      const q = (query || '').toLowerCase();
+      let label = escapeHtml(name);
+      if (q) {
+        const idx = lower.indexOf(q);
+        if (idx >= 0) {
+          label =
+            escapeHtml(name.slice(0, idx)) +
+            '<b>' +
+            escapeHtml(name.slice(idx, idx + q.length)) +
+            '</b>' +
+            escapeHtml(name.slice(idx + q.length));
+        }
+      }
+      btn.innerHTML = `<span>${label}</span>${i === 0 ? '<small class="muted">↵</small>' : ''}`;
+      btn.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        selectActress(name);
       });
-  } catch {}
-  for (const s of searchStars('', 200)) {
-    const opt = document.createElement('option');
-    opt.value = s.n;
-    actressDatalist.appendChild(opt);
+      actressDropdown.appendChild(btn);
+    });
+    actressDropdown.hidden = false;
+    dropdownItems = matches.slice(0, 8);
   }
+
+  function closeDropdown() {
+    actressDropdown.hidden = true;
+    dropdownItems = [];
+  }
+
+  function selectActress(name) {
+    actressInput.value = name;
+    closeDropdown();
+    actressInput.dispatchEvent(new Event('input'));
+  }
+
+  async function updateDropdown(query) {
+    const q = (query || '').trim();
+    if (!q) {
+      // No query: show recents + top of dataset
+      const recent = getRecentActresses();
+      const recents = recent.map((n) => n).filter(Boolean);
+      const topDataset = searchStars('', 6).map((s) => s.n);
+      const seen = new Set();
+      const combined = [];
+      [...recents, ...topDataset].forEach((n) => {
+        const key = n.toLowerCase();
+        if (seen.has(key)) return;
+        seen.add(key);
+        combined.push(n);
+      });
+      renderDropdown(combined.slice(0, 8), '');
+      return;
+    }
+    const lower = q.toLowerCase();
+    // 1. Guardadas
+    let stored = [];
+    try {
+      const all = await listActresses();
+      stored = all
+        .filter((a) => a && a.name)
+        .map((a) => a.name)
+        .filter((n) => n.toLowerCase().includes(lower));
+    } catch {}
+    // 2. Dataset
+    const dataset = searchStars(q, 12).map((s) => s.n);
+    // Dedup, priorizando guardadas
+    const seen = new Set();
+    const combined = [];
+    [...stored, ...dataset].forEach((n) => {
+      const key = n.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      combined.push(n);
+    });
+    renderDropdown(combined.slice(0, 8), q);
+  }
+
+  actressInput.addEventListener('focus', () => updateDropdown(actressInput.value));
+  actressInput.addEventListener('blur', () => {
+    setTimeout(closeDropdown, 150);
+  });
+
+  let lastInput = '';
+  actressInput.addEventListener('input', () => {
+    const v = actressInput.value;
+    if (v === lastInput) return;
+    lastInput = v;
+    updateDropdown(v);
+  });
+
+  actressInput.addEventListener('keydown', (e) => {
+    if (!actressDropdown.hidden && dropdownItems.length) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        selectActress(dropdownItems[0]);
+        return;
+      }
+      if (e.key === 'Escape') {
+        closeDropdown();
+        return;
+      }
+    }
+  });
 
   body.querySelectorAll('#recentActressChips .chip').forEach((c) => {
     c.addEventListener('click', () => {
-      body.querySelector('#actressInput').value = c.dataset.actress;
-      body.querySelector('#actressInput').dispatchEvent(new Event('input'));
+      const name = c.dataset.actress;
+      selectActress(name);
     });
   });
+
+  // Initial render
+  if (initialActressName) {
+    updateDropdown(initialActressName);
+  }
 
   // ---- Sitio (solo edit) ----
   let siteSelect = null;
@@ -444,18 +552,17 @@ export async function openRecordModal({ presetAt = null, editId = null, simple =
     typingTimer = null;
     searchToken++;
   };
-  const actressInput = body.querySelector('#actressInput');
   const actressInfo = body.querySelector('#actressInfo');
 
   function autofillFromActress(a) {
     if (!a) return;
-    if (a.source === 'pornhub' && siteSelect && !siteSelect.select.value) {
-      siteSelect.select.value = 'Pornhub';
-    }
-    // Auto-categorías desde actriz
-    const catsFromActress = [...guessCategoriesFromActress(a)].filter((c) => allCats.includes(c));
-    catsFromActress.forEach((c) => selectedCats.add(c));
+    const catsFromActress = [...guessCategoriesFromActress(a)];
+    catsFromActress.forEach((c) => {
+      if (!allCats.includes(c)) allCats.push(c);
+      selectedCats.add(c);
+    });
     rerenderChips();
+    renderCatPickerList('');
     return catsFromActress;
   }
 
@@ -485,7 +592,7 @@ export async function openRecordModal({ presetAt = null, editId = null, simple =
     if (a.relation) meta.push(escapeHtml(a.relation));
     if (a.ethnicity) meta.push(escapeHtml(a.ethnicity));
     const avatar = a.avatar ? `<div class="actress-info__avatar"><img src="${escapeHtml(a.avatar)}" alt="" loading="lazy"></div>` : '';
-    const autoCats = [...guessCategoriesFromActress(a)].filter((c) => allCats.includes(c));
+    const autoCats = [...guessCategoriesFromActress(a)];
     const autoCatsHtml = autoCats.length
       ? `<div class="actress-info__autocats">
           <span class="actress-info__autocats-label">Auto:</span>
@@ -553,14 +660,7 @@ export async function openRecordModal({ presetAt = null, editId = null, simple =
       actressInfo.innerHTML = '';
       return;
     }
-    const matches = searchStars(name, 30);
-    actressDatalist.innerHTML = '';
-    for (const s of matches) {
-      const opt = document.createElement('option');
-      opt.value = s.n;
-      actressDatalist.appendChild(opt);
-    }
-    typingTimer = setTimeout(() => lookupActress(name), 400);
+    typingTimer = setTimeout(() => lookupActress(name), 350);
   });
 
   cancel.addEventListener('click', () => {
