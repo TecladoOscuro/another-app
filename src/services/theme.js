@@ -16,6 +16,13 @@ export function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
   const meta = document.querySelector('meta[name="theme-color"]:not([media])');
   if (meta) meta.setAttribute('content', theme === 'dark' ? '#0b0b0f' : '#f5f5f7');
+  document
+    .querySelectorAll('meta[name="theme-color"]')
+    .forEach((m) => {
+      if (m.getAttribute('media')) {
+        m.setAttribute('content', theme === 'dark' ? '#0b0b0f' : '#f5f5f7');
+      }
+    });
 }
 
 export async function toggleTheme() {
