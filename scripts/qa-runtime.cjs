@@ -25,7 +25,6 @@ const html = `<!doctype html><html><body>
     <button class="tab" data-route="home">H</button>
     <button class="tab" data-route="calendar">C</button>
     <button class="tab" data-route="stats">S</button>
-    <button class="tab" data-route="actresses">Ac</button>
     <button class="tab" data-route="settings">Aj</button>
   </nav>
 </div>
@@ -78,7 +77,6 @@ const minLengths = {
   home: 200,
   calendar: 200,
   stats: 1000,
-  actresses: 200,
   settings: 200,
 };
 
@@ -102,7 +100,7 @@ const minLengths = {
   await new Promise((r) => { tx.oncomplete = r; });
 
   const failures = [];
-  for (const t of ['home', 'stats', 'calendar', 'actresses', 'settings']) {
+  for (const t of ['home', 'stats', 'calendar', 'settings']) {
     errors.length = 0;
     const tab = dom.window.document.querySelector(`[data-route="${t}"]`);
     if (!tab) {

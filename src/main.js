@@ -5,7 +5,6 @@ import { renderHome } from './screens/home.js';
 import { renderStats } from './screens/stats.js';
 import { renderCalendar } from './screens/calendar.js';
 import { renderSettings } from './screens/settings.js';
-import { renderActresses } from './screens/actresses.js';
 import { toast } from './ui/modal.js';
 
 async function bootstrap() {
@@ -26,10 +25,6 @@ async function bootstrap() {
   registerRoute('settings', async (main) => {
     await renderSettings(main);
     return { title: 'Ajustes' };
-  });
-  registerRoute('actresses', async (main) => {
-    await renderActresses(main);
-    return { title: 'Actrices' };
   });
 
   attachTabbar();

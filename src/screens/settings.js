@@ -17,13 +17,6 @@ export async function renderSettings(main) {
         En Android, el navegador ofrece el banner automáticamente.
       </div>
 
-      <div class="install-hint" style="border-color: var(--warning);">
-        <b>Datos de actrices desde Pornhub:</b> los proxies CORS públicos (corsproxy.io, allorigins.win) están
-        bloqueados para Pornhub. Si quieres datos automáticos, instala la extensión
-        <b>Allow CORS</b> en Chrome/Firefox y recarga. Si no, edita cada actriz desde la pestaña
-        <b>Actrices</b> y rellena los datos manualmente.
-      </div>
-
       <div class="section-head"><h3>Datos</h3></div>
       <div class="settings-group">
         <div class="settings-row">
