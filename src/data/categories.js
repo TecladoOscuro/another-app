@@ -227,8 +227,7 @@ export const SOURCE_TYPES = [
   { id: 'ad', label: 'Anuncio de putas', icon: '📢' },
   { id: 'onlyfans', label: 'OnlyFans', icon: '💎' },
   { id: 'cam', label: 'Webcam', icon: '📹' },
-  { id: 'memory', label: 'Memoria o fotos', icon: '🧠' },
-  { id: 'irl', label: 'Experiencia real', icon: '💋' },
+  { id: 'photo', label: 'Fotos o recuerdos', icon: '📸' },
 ];
 
 export const DEVICES = [

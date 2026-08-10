@@ -14,8 +14,8 @@ import {
   avgDuration,
   weeklySeries,
   ageBucket,
-  heightBucket,
-  weightBucket,
+  decadeBucket,
+  ethnicityBucket,
   rankBucket,
   sourceBucket,
   distribution,
@@ -24,6 +24,7 @@ import {
 import { MONTHS_SHORT, MONTHS_ES, WEEKDAYS_ES, addDays, startOfDay, pad2 } from '../services/date.js';
 import { formatDuration } from '../services/date.js';
 import { escapeHtml } from '../services/html.js';
+import { openActressDetailModal } from '../ui/actressDetail.js';
 
 const FILTERS = {
   all: { label: 'Todo' },
@@ -83,12 +84,9 @@ export async function renderStats(main) {
   const byLubricant = topN(totalsBy(entries, (e) => e.lubricant || null), 6).filter(([k]) => k);
 
   const byAge = distribution(entries, actresses, ageBucket);
-  const byHeight = distribution(entries, actresses, heightBucket);
-  const byWeight = distribution(entries, actresses, weightBucket);
+  const byDecade = distribution(entries, actresses, decadeBucket);
   const byRank = distribution(entries, actresses, rankBucket);
-  const byRelation = distribution(entries, actresses, (a) => a?.relation);
-  const byGender = distribution(entries, actresses, (a) => a?.gender);
-  const byEthnicity = distribution(entries, actresses, (a) => a?.ethnicity);
+  const byEthnicity = distribution(entries, actresses, ethnicityBucket);
   const bySourceKind = distribution(entries, actresses, sourceBucket);
 
   const topActresses = topActressesByScore(entries, actresses, 10);
@@ -122,11 +120,11 @@ export async function renderStats(main) {
           </div>
         </div>
         ${
-          years.length > 1
+          years.length
             ? `<div class="filter-group">
                 <div class="filter-group__label">Año</div>
                 <div class="filter-row" id="yearChips">
-                  <button class="chip ${currentYear === null ? 'is-active' : ''}" data-year="">Auto</button>
+                  <button class="chip ${currentYear === null ? 'is-active' : ''}" data-year="">Todos</button>
                   ${years
                     .map(
                       (y) =>
@@ -198,14 +196,15 @@ export async function renderStats(main) {
 
       ${collapsibleSection('actresses', 'Top actrices', actressesCard(topActresses, entries, actresses), entries.length > 0)}
 
-      ${collapsibleSection('taste-age', 'Tus gustos: edad', tasteCard(byAge), hasActressData(entries, actresses))}
-      ${collapsibleSection('taste-height', 'Tus gustos: altura', tasteCard(byHeight), hasActressData(entries, actresses))}
-      ${collapsibleSection('taste-weight', 'Tus gustos: peso', tasteCard(byWeight), hasActressData(entries, actresses))}
-      ${collapsibleSection('taste-ethnicity', 'Tus gustos: etnia', tasteCard(byEthnicity), hasActressData(entries, actresses))}
-      ${collapsibleSection('taste-rank', 'Tus gustos: ranking Pornhub', tasteCard(byRank), hasActressData(entries, actresses))}
-      ${collapsibleSection('taste-relation', 'Tus gustos: relación', tasteCard(byRelation), hasActressData(entries, actresses))}
-      ${collapsibleSection('taste-gender', 'Tus gustos: género', tasteCard(byGender), hasActressData(entries, actresses))}
-      ${collapsibleSection('taste-source', 'Tus datos: fuente', tasteCard(bySourceKind), hasActressData(entries, actresses))}
+      <div class="taste-section-head">
+        <h3>Tu perfil de gustos</h3>
+        <span class="muted">derivado de las actrices que ves</span>
+      </div>
+      ${collapsibleSection('taste-age', 'Edad', donutCard(byAge), hasAgeData(entries, actresses))}
+      ${collapsibleSection('taste-decade', 'Década de nacimiento', donutCard(byDecade), hasAgeData(entries, actresses))}
+      ${collapsibleSection('taste-ethnicity', 'Etnia', donutCard(byEthnicity), hasEthnicityData(entries, actresses))}
+      ${collapsibleSection('taste-rank', 'Ranking Pornhub', donutCard(byRank), hasRankData(entries, actresses))}
+      ${collapsibleSection('taste-source', 'Origen de los datos', donutCard(bySourceKind), hasSourceData(entries, actresses))}
 
       ${collapsibleSection('sites', 'Sitios', barsCard(bySite, 6))}
       ${collapsibleSection('devices', 'Dispositivos', barsCard(byDevice, 6))}
@@ -219,7 +218,17 @@ export async function renderStats(main) {
   bindFilters(main);
   bindCollapsibles(main);
   bindExtraToggles(main);
+  bindActressClicks(main, entries);
   renderHeatmap(heatmap, heatColors, heatMax);
+}
+
+function bindActressClicks(main, entries) {
+  main.querySelectorAll('[data-actress]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const name = decodeURIComponent(btn.dataset.actress);
+      openActressDetailModal(name, entries);
+    });
+  });
 }
 
 function renderWrappedHero(year, t, streaks, actressCount, catCount, prev, report, actresses) {
@@ -288,13 +297,6 @@ function renderWrappedHero(year, t, streaks, actressCount, catCount, prev, repor
     bigNumber: String(catCount),
     sub: `categorías distintas`,
     accent: 'green',
-  }));
-
-  cards.push(wrappedCard({
-    title: 'Tu colección',
-    bigNumber: String(actressCount),
-    sub: `actrices únicas`,
-    accent: 'purple',
   }));
 
   return `
@@ -391,35 +393,92 @@ function actressesCard(topActresses, entries, actresses) {
     return `<div class="empty">Sin datos.</div>`;
   }
   return `<div class="card"><div class="list">${topActresses
-    .map(({ actress, count }) => {
-      const name = actress?.name || '—';
+    .map(({ actress, displayName, count }) => {
+      const name = displayName || actress?.name || '—';
       const initial = name[0] ? name[0].toUpperCase() : '?';
       const meta = [];
       if (actress?.rank) meta.push(`#${escapeHtml(actress.rank)}`);
-      if (actress?.videosCount) meta.push(`${formatBigNumber(actress.videosCount)} vídeos`);
-      if (actress?.subscribers) meta.push(`${formatBigNumber(actress.subscribers)} subs`);
       if (actress?.born) meta.push(escapeHtml(actress.born));
-      if (actress?.height) meta.push(escapeHtml(actress.height));
       if (actress?.ethnicity) meta.push(escapeHtml(actress.ethnicity));
+      const encoded = encodeURIComponent(name);
       return `
-      <div class="actress-card">
+      <button class="actress-card actress-card--clickable" data-actress="${encoded}" style="background:none;border:0;width:100%;text-align:left;cursor:pointer;">
         <div class="actress-card__avatar">${actress?.avatar ? `<img src="${escapeHtml(actress.avatar)}" alt="" loading="lazy">` : escapeHtml(initial)}</div>
         <div class="actress-card__info">
           <div class="actress-card__name">${escapeHtml(name)}</div>
           <div class="actress-card__meta">${meta.length ? meta.join(' · ') : `${count} ${count === 1 ? 'vez' : 'veces'}`}</div>
         </div>
         <div class="actress-card__count">${count}</div>
-      </div>`;
+      </button>`;
     })
     .join('')}</div></div>`;
 }
 
-function tasteCard(map) {
+const DONUT_PALETTE = ['#ff3b6b', '#ff9f0a', '#00b894', '#0984e3', '#6c5ce7', '#fdcb6e', '#e17055', '#74b9ff', '#a29bfe', '#55efc4'];
+
+function donutCard(map) {
   if (!map || map.size === 0) {
-    return `<div class="empty subtle" style="padding: 16px;">Sin datos de actriz. Asegúrate de que la actriz tenga info de Pornhub (rank, vídeos, etc.).</div>`;
+    return `<div class="empty subtle" style="padding: 16px;">Sin datos suficientes.</div>`;
   }
   const entries = [...map.entries()].sort((a, b) => b[1] - a[1]);
-  return `<div class="card"><div class="bars">${barsHtml(entries)}</div></div>`;
+  const total = entries.reduce((acc, [, v]) => acc + v, 0);
+  const max = Math.max(...entries.map(([, v]) => v));
+  return `<div class="card">${entries
+    .map(([label, v], i) => {
+      const pct = total > 0 ? Math.round((v / total) * 100) : 0;
+      const color = DONUT_PALETTE[i % DONUT_PALETTE.length];
+      const barPct = max > 0 ? Math.round((v / max) * 100) : 0;
+      return `
+        <div class="taste-row">
+          <div class="taste-row__head">
+            <span class="taste-row__dot" style="background:${color}"></span>
+            <span class="taste-row__label">${escapeHtml(label)}</span>
+            <span class="taste-row__value">${v} <span class="muted">(${pct}%)</span></span>
+          </div>
+          <div class="taste-row__track">
+            <span class="taste-row__fill" style="width:${barPct}%; background:${color}"></span>
+          </div>
+        </div>`;
+    })
+    .join('')}</div>`;
+}
+
+function hasAgeData(entries, actresses) {
+  if (!entries.length) return false;
+  const aByName = new Map(actresses.filter((a) => a?.name).map((a) => [a.name.toLowerCase(), a]));
+  for (const e of entries) {
+    if (!e.actressName) continue;
+    const a = aByName.get(e.actressName.toLowerCase());
+    if (a && a.born) return true;
+  }
+  return false;
+}
+
+function hasEthnicityData(entries, actresses) {
+  if (!entries.length) return false;
+  const aByName = new Map(actresses.filter((a) => a?.name).map((a) => [a.name.toLowerCase(), a]));
+  for (const e of entries) {
+    if (!e.actressName) continue;
+    const a = aByName.get(e.actressName.toLowerCase());
+    if (a?.ethnicity) return true;
+  }
+  return false;
+}
+
+function hasRankData(entries, actresses) {
+  if (!entries.length) return false;
+  const aByName = new Map(actresses.filter((a) => a?.name).map((a) => [a.name.toLowerCase(), a]));
+  for (const e of entries) {
+    if (!e.actressName) continue;
+    const a = aByName.get(e.actressName.toLowerCase());
+    if (a?.rank) return true;
+  }
+  return false;
+}
+
+function hasSourceData(entries, actresses) {
+  if (!entries.length) return false;
+  return true;
 }
 
 function barsList(arr, labelFn) {

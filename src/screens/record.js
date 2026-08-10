@@ -75,6 +75,7 @@ function hasRealActressData(a) {
 function guessCategoriesFromActress(a) {
   const cats = new Set();
   if (!a) return cats;
+
   if (a.born) {
     const yearMatch = a.born.match(/\b(19|20)\d{2}\b/);
     if (yearMatch) {
@@ -85,6 +86,7 @@ function guessCategoriesFromActress(a) {
       else if (age < 30) cats.add('Young');
     }
   }
+
   if (a.ethnicity) {
     const e = a.ethnicity.toLowerCase();
     if (e.includes('latin') || e.includes('hispanic')) cats.add('Latina');
@@ -93,10 +95,29 @@ function guessCategoriesFromActress(a) {
     if (e.includes('caucasian') || e.includes('white')) cats.add('Caucasian');
     if (e.includes('middle eastern') || e.includes('arab')) cats.add('Arab');
   }
+
+  // Heurística por nombre (para actrices que no tienen ethnicity en el dataset)
+  if (!a.ethnicity && a.name) {
+    const n = a.name.toLowerCase();
+    const asianPatterns = ['mei', 'ling', 'xia', 'yuki', 'ai ', 'sakura', 'kim', 'lee', 'park', 'chan', 'ji ', 'aoi', 'rina', 'mio', 'hina', 'yui', 'emi', 'rio'];
+    const latinPatterns = ['lopez', 'garcia', 'rodriguez', 'martinez', 'hernandez', 'gonzalez', 'luna', 'isabella', 'valentina', 'camila', 'sofia', 'andrea'];
+    if (asianPatterns.some((p) => n.includes(p))) cats.add('Asian');
+    if (latinPatterns.some((p) => n.includes(p))) cats.add('Latina');
+  }
+
   if (a.relation) {
     const r = a.relation.toLowerCase();
     if (r.includes('married')) cats.add('MILF');
   }
+
+  // Tags PH ya canónicos
+  if (a.tags && Array.isArray(a.tags)) {
+    const knownCats = new Set(['MILF', 'Teen', 'Asian', 'Latina', 'Black', 'Caucasian', 'Ebony', 'Amateur', 'Anal', 'Blowjob', 'Threesome', 'Creampie', 'Squirt', 'Petite', 'Babe', 'Masturbation', 'Lesbian', 'Big Tits', 'Big Ass', 'Brunette', 'Blonde', 'Redhead', 'Shaved', 'Tattoo', 'Piercing']);
+    a.tags.forEach((t) => {
+      if (knownCats.has(t)) cats.add(t);
+    });
+  }
+
   return cats;
 }
 
@@ -181,15 +202,13 @@ export async function openRecordModal({ presetAt = null, editId = null, simple =
       ${
         existing
           ? `<div class="record-section">
-            <div class="field-row">
-              <div class="field">
-                <label>Fecha</label>
-                <input type="date" name="date" value="${escapeAttr(dateToInput(existing.at))}" required />
-              </div>
-              <div class="field">
-                <label>Hora</label>
-                <input type="time" name="time" value="${escapeAttr(timeToInput(existing.at))}" required />
-              </div>
+            <div class="field">
+              <label>Fecha</label>
+              <input type="date" name="date" value="${escapeAttr(dateToInput(existing.at))}" required />
+            </div>
+            <div class="field" style="margin-top: 10px;">
+              <label>Hora</label>
+              <input type="time" name="time" value="${escapeAttr(timeToInput(existing.at))}" required />
             </div>
           </div>`
           : ''
@@ -434,11 +453,10 @@ export async function openRecordModal({ presetAt = null, editId = null, simple =
       siteSelect.select.value = 'Pornhub';
     }
     // Auto-categorías desde actriz
-    const catsFromActress = guessCategoriesFromActress(a);
-    catsFromActress.forEach((c) => {
-      if (allCats.includes(c)) selectedCats.add(c);
-    });
+    const catsFromActress = [...guessCategoriesFromActress(a)].filter((c) => allCats.includes(c));
+    catsFromActress.forEach((c) => selectedCats.add(c));
     rerenderChips();
+    return catsFromActress;
   }
 
   function renderActressInfo(a) {
@@ -467,10 +485,21 @@ export async function openRecordModal({ presetAt = null, editId = null, simple =
     if (a.relation) meta.push(escapeHtml(a.relation));
     if (a.ethnicity) meta.push(escapeHtml(a.ethnicity));
     const avatar = a.avatar ? `<div class="actress-info__avatar"><img src="${escapeHtml(a.avatar)}" alt="" loading="lazy"></div>` : '';
-    actressInfo.innerHTML = `<div class="actress-info__row">${avatar}<div class="actress-info__meta">${meta.length ? meta.join(' · ') : 'PH sin datos detallados'}</div></div>`;
+    const autoCats = [...guessCategoriesFromActress(a)].filter((c) => allCats.includes(c));
+    const autoCatsHtml = autoCats.length
+      ? `<div class="actress-info__autocats">
+          <span class="actress-info__autocats-label">Auto:</span>
+          ${autoCats.map((c) => `<span class="chip is-active" style="font-size: 11px; padding: 3px 8px;">${escapeHtml(c)}</span>`).join(' ')}
+        </div>`
+      : '';
+    actressInfo.innerHTML = `<div class="actress-info__row">${avatar}<div class="actress-info__meta">${meta.length ? meta.join(' · ') : 'PH sin datos detallados'}</div>${autoCatsHtml}</div>`;
   }
 
   async function lookupActress(name) {
+    const all = await listActresses();
+    const local = all.find((x) => x.name && x.name.toLowerCase() === name.toLowerCase());
+
+    // 1. Dataset estático (PH completo, instantáneo)
     const star = getStar(name);
     if (star) {
       const slug = `slug:${slugify(name)}`;
@@ -483,15 +512,13 @@ export async function openRecordModal({ presetAt = null, editId = null, simple =
         url: `https://www.pornhub.com/pornstar/${slugify(name)}`,
         fetchedAt: Date.now(),
       };
-      const all = await listActresses();
-      const local = all.find((x) => x.name && x.name.toLowerCase() === name.toLowerCase());
       const merged = local ? { ...enriched, ...local, name: star.n } : enriched;
       renderActressInfo(merged);
       autofillFromActress(merged);
       return;
     }
-    const all = await listActresses();
-    const local = all.find((x) => x.name && x.name.toLowerCase() === name.toLowerCase());
+
+    // 2. Local con datos
     if (local && hasRealActressData(local)) {
       renderActressInfo(local);
       autofillFromActress(local);
@@ -501,6 +528,8 @@ export async function openRecordModal({ presetAt = null, editId = null, simple =
       renderActressInfo(local);
       return;
     }
+
+    // 3. Scraping en vivo (rara vez funciona por CORS)
     let token = ++searchToken;
     actressInfo.innerHTML = `<div class="actress-info__row">Buscando en Pornhub…</div>`;
     try {

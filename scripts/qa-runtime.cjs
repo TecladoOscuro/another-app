@@ -193,6 +193,47 @@ const minLengths = {
       if (!text2.includes('Lana') && !text2.includes('#1')) {
         failures.push(`PH dataset lookup failed for "Lana Rhoades": "${text2}"`);
       }
+
+      // Test: stats display name (not slug)
+      // Seed an entry for "Mia Malkova" with actressId = 'slug:mia-malkova'
+      const dbReq3 = dom.window.indexedDB.open('nuttracker');
+      await new Promise((res) => { dbReq3.onsuccess = res; });
+      const db3 = dbReq3.result;
+      const tx3 = db3.transaction(['entries'], 'readwrite');
+      tx3.objectStore('entries').add({ at: Date.now(), categories: [], category: 'X', actressName: 'Mia Malkova', actressId: 'slug:mia-malkova', device: 'iPad', lubricant: 'without' });
+      await new Promise((r) => { tx3.oncomplete = r; });
+
+      // Navigate to stats
+      const statsTab = dom.window.document.querySelector('[data-route="stats"]');
+      statsTab.click();
+      await new Promise((r) => setTimeout(r, 1500));
+      const actressNamesInStats = [...dom.window.document.querySelectorAll('.actress-card__name')].map(e => e.textContent);
+      console.log('   stats actress names:', JSON.stringify(actressNamesInStats));
+      if (actressNamesInStats.some(n => n === 'slug:mia-malkova' || /^slug:/.test(n))) {
+        failures.push(`stats shows raw slug: ${actressNamesInStats}`);
+      }
+      if (!actressNamesInStats.some(n => n.toLowerCase().includes('mia'))) {
+        failures.push(`stats does not show Mia Malkova: ${actressNamesInStats}`);
+      }
+
+      // Test: clicking an actress in stats opens detail modal
+      const miaCard = [...dom.window.document.querySelectorAll('[data-actress]')].find(b => b.dataset.actress.toLowerCase().includes('mia'));
+      if (miaCard) {
+        miaCard.click();
+        await new Promise((r) => setTimeout(r, 500));
+        const detailModal = dom.window.document.querySelector('.modal-sheet');
+        const detailName = dom.window.document.querySelector('.actress-detail h3')?.textContent;
+        console.log('   detail modal opened, name:', detailName);
+        if (!detailName || !detailName.toLowerCase().includes('mia')) {
+          failures.push(`actress detail modal name wrong: ${detailName}`);
+        }
+        // close
+        const closeBtn = [...dom.window.document.querySelectorAll('.modal-footer button')].find(b => b.textContent === 'Cerrar');
+        if (closeBtn) closeBtn.click();
+        await new Promise((r) => setTimeout(r, 400));
+      } else {
+        failures.push('Mia card not found in stats');
+      }
     }
 
     // Test 2: open cat picker, add a new category

@@ -208,26 +208,31 @@ export function ageBucket(actress) {
   return '50+';
 }
 
-export function heightBucket(actress) {
-  if (!actress?.height) return null;
-  const m = actress.height.match(/(\d{2,3})/);
-  if (!m) return null;
-  const cm = parseInt(m[1], 10);
-  if (cm < 160) return '<160 cm';
-  if (cm < 170) return '160-169 cm';
-  if (cm < 180) return '170-179 cm';
-  return '180+ cm';
+export function decadeBucket(actress) {
+  const y = birthYear(actress);
+  if (!y) return null;
+  return `${Math.floor(y / 10) * 0}s`;
 }
 
-export function weightBucket(actress) {
-  if (!actress?.weight) return null;
-  const m = actress.weight.match(/(\d{2,3})/);
-  if (!m) return null;
-  const kg = parseInt(m[1], 10);
-  if (kg < 50) return '<50 kg';
-  if (kg < 60) return '50-59 kg';
-  if (kg < 70) return '60-69 kg';
-  return '70+ kg';
+export function ethnicityBucket(actress) {
+  if (!actress?.ethnicity) {
+    // Heurística por nombre
+    if (!actress?.name) return null;
+    const n = actress.name.toLowerCase();
+    const asianPatterns = ['mei ', 'ling', 'xia', 'yuki', ' ai ', 'sakura', 'kim ', 'lee ', 'park', 'chan', ' ji ', 'aoi ', 'rina', ' mio ', 'hina', ' yui ', 'emi ', ' rio '];
+    const latinPatterns = ['lopez', 'garcia', 'rodriguez', 'martinez', 'hernandez', 'gonzalez', ' luna', 'isabella', 'valentina', 'camila', 'sofia', ' andrea'];
+    if (asianPatterns.some((p) => n.includes(p.trim()))) return 'Asian';
+    if (latinPatterns.some((p) => n.includes(p))) return 'Latina';
+    return null;
+  }
+  const e = actress.ethnicity.toLowerCase();
+  if (e.includes('latin') || e.includes('hispanic')) return 'Latina';
+  if (e.includes('asian')) return 'Asian';
+  if (e.includes('ebony') || e.includes('black')) return 'Black';
+  if (e.includes('caucasian') || e.includes('white')) return 'Caucasian';
+  if (e.includes('middle eastern') || e.includes('arab')) return 'Arab';
+  if (e.includes('mixed')) return 'Mixed';
+  return actress.ethnicity;
 }
 
 export function rankBucket(actress) {
@@ -242,10 +247,11 @@ export function rankBucket(actress) {
 }
 
 export function sourceBucket(actress) {
-  if (!actress) return 'manual';
-  if (actress.notFound) return 'manual (PH no)';
-  if (actress.source === 'manual') return 'manual';
-  return 'PH scraped';
+  if (!actress) return null;
+  if (actress.notFound) return null;
+  if (actress.source === 'manual') return 'Manual';
+  if (actress.source === 'ph-dataset') return 'Dataset PH';
+  return 'PH (extra)';
 }
 
 export function distribution(entries, actresses, compute) {
@@ -276,8 +282,28 @@ export function topActressesByScore(entries, actresses, limit = 5) {
     .sort((a, b) => b[1] - a[1])
     .slice(0, limit)
     .map(([id, count]) => {
-      const a = actresses.find((x) => x.id === id || x.name === id);
-      return { actress: a, count };
+      const lowerId = id.toLowerCase();
+      const a = actresses.find(
+        (x) =>
+          (x.id && x.id === id) ||
+          (x.name && x.name.toLowerCase() === lowerId) ||
+          (x.id && x.id.replace(/^slug:/, '').toLowerCase() === lowerId.replace(/^slug:/, '')) ||
+          (x.name && x.name.toLowerCase().includes(lowerId.replace(/^slug:/, ''))),
+      );
+      // Fallback: si no se encuentra pero el id es slug:foo, mostrar "foo" humanizado
+      let displayName = a?.name;
+      if (!displayName) {
+        if (id.startsWith('slug:')) {
+          displayName = id.replace(/^slug:/, '').replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+        } else {
+          displayName = id;
+        }
+      }
+      return {
+        actress: a,
+        displayName,
+        count,
+      };
     });
 }
 
