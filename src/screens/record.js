@@ -76,6 +76,7 @@ function guessCategoriesFromActress(a) {
   const cats = new Set();
   if (!a) return cats;
 
+  // Edad
   if (a.born) {
     const yearMatch = a.born.match(/\b(19|20)\d{2}\b/);
     if (yearMatch) {
@@ -87,32 +88,55 @@ function guessCategoriesFromActress(a) {
     }
   }
 
+  // Etnia
   if (a.ethnicity) {
     const e = a.ethnicity.toLowerCase();
     if (e.includes('latin') || e.includes('hispanic')) cats.add('Latina');
-    if (e.includes('asian')) cats.add('Asian');
-    if (e.includes('ebony') || e.includes('black')) cats.add('Black');
-    if (e.includes('caucasian') || e.includes('white')) cats.add('Caucasian');
-    if (e.includes('middle eastern') || e.includes('arab')) cats.add('Arab');
+    else if (e.includes('asian')) cats.add('Asian');
+    else if (e.includes('ebony') || e.includes('black')) cats.add('Black');
+    else if (e.includes('caucasian') || e.includes('white')) cats.add('Caucasian');
+    else if (e.includes('middle eastern') || e.includes('arab')) cats.add('Arab');
+    else if (e.includes('mixed')) cats.add('Mixed');
   }
 
-  // Heurística por nombre (para actrices que no tienen ethnicity en el dataset)
-  if (!a.ethnicity && a.name) {
-    const n = a.name.toLowerCase();
-    const asianPatterns = ['mei', 'ling', 'xia', 'yuki', 'ai ', 'sakura', 'kim', 'lee', 'park', 'chan', 'ji ', 'aoi', 'rina', 'mio', 'hina', 'yui', 'emi', 'rio'];
-    const latinPatterns = ['lopez', 'garcia', 'rodriguez', 'martinez', 'hernandez', 'gonzalez', 'luna', 'isabella', 'valentina', 'camila', 'sofia', 'andrea'];
-    if (asianPatterns.some((p) => n.includes(p))) cats.add('Asian');
-    if (latinPatterns.some((p) => n.includes(p))) cats.add('Latina');
+  // Cabello
+  if (a.hair) {
+    const h = a.hair.toLowerCase();
+    if (h.includes('blond')) cats.add('Blonde');
+    else if (h.includes('brown') || h.includes('brunette')) cats.add('Brunette');
+    else if (h.includes('red')) cats.add('Redhead');
+    else if (h.includes('black')) cats.add('Brunette');
   }
 
+  // Medidas → Big Tits / Big Ass
+  const bust = parseInt(String(a.bust || '').match(/(\d+)/)?.[1] || '', 10);
+  if (bust && bust >= 90) cats.add('Big Tits');
+  const hip = parseInt(String(a.hip || '').match(/(\d+)/)?.[1] || '', 10);
+  const waist = parseInt(String(a.waist || '').match(/(\d+)/)?.[1] || '', 10);
+  if (hip && waist && hip - waist >= 25) cats.add('Big Ass');
+
+  // Talla → Petite / Tall
+  const height = parseInt(String(a.height || '').match(/(\d+)/)?.[1] || '', 10);
+  if (height && height < 160) cats.add('Petite');
+  else if (height && height >= 175) cats.add('Tall');
+
+  // Peso
+  const weight = parseInt(String(a.weight || '').match(/(\d+)/)?.[1] || '', 10);
+  if (weight && weight >= 80) cats.add('BBW');
+
+  // Relation
   if (a.relation) {
     const r = a.relation.toLowerCase();
     if (r.includes('married')) cats.add('MILF');
   }
 
-  // Tags PH ya canónicos
+  // Tags ya canónicos (de FreeOnes, scraping, etc.)
   if (a.tags && Array.isArray(a.tags)) {
-    const knownCats = new Set(['MILF', 'Teen', 'Asian', 'Latina', 'Black', 'Caucasian', 'Ebony', 'Amateur', 'Anal', 'Blowjob', 'Threesome', 'Creampie', 'Squirt', 'Petite', 'Babe', 'Masturbation', 'Lesbian', 'Big Tits', 'Big Ass', 'Brunette', 'Blonde', 'Redhead', 'Shaved', 'Tattoo', 'Piercing']);
+    const knownCats = new Set([
+      'MILF', 'Teen', 'Asian', 'Latina', 'Black', 'Caucasian', 'Ebony', 'Amateur', 'Anal', 'Blowjob', 'Threesome', 'Creampie', 'Squirt',
+      'Petite', 'Babe', 'Masturbation', 'Lesbian', 'Big Tits', 'Big Ass', 'Brunette', 'Blonde', 'Redhead',
+      'Shaved', 'Tattoo', 'Piercing', 'BBW', 'Tall', 'Stockings', 'Heels', 'Lingerie', 'Glamour',
+    ]);
     a.tags.forEach((t) => {
       if (knownCats.has(t)) cats.add(t);
     });

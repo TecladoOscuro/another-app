@@ -77,7 +77,10 @@ export async function openActressDetailModal(name, allEntries = []) {
   if (a?.relation) meta.push({ label: 'Relación', value: a.relation });
   if (a?.height) meta.push({ label: 'Altura', value: a.height });
   if (a?.weight) meta.push({ label: 'Peso', value: a.weight });
-  if (a?.measurements) meta.push({ label: 'Medidas', value: a.measurements });
+  if (a?.bust) meta.push({ label: 'Busto', value: a.bust + (a?.cup ? a.cup : '') });
+  if (a?.waist) meta.push({ label: 'Cintura', value: a.waist });
+  if (a?.hip) meta.push({ label: 'Cadera', value: a.hip });
+  if (a?.cup) meta.push({ label: 'Copa', value: a.cup });
   if (a?.hair) meta.push({ label: 'Cabello', value: a.hair });
   if (a?.eyes) meta.push({ label: 'Ojos', value: a.eyes });
   if (a?.startedYear) meta.push({ label: 'Año de inicio', value: a.startedYear });

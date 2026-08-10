@@ -98,8 +98,10 @@ const minLengths = {
   eStore.add({ at: now - 86400000 * 5, category: 'Amateur', categories: ['Amateur', 'MILF'], actressName: 'Pepita Test', actressId: 'slug:pepita-test', sourceType: 'clip', site: 'Pornhub', device: 'iPhone', lubricant: 'with' });
   eStore.add({ at: now - 86400000 * 3, category: 'Anal', categories: ['Anal', 'Teen'], actressName: 'Pepita Test', actressId: 'slug:pepita-test', sourceType: 'clip', site: 'Pornhub', device: 'iPhone', lubricant: 'with' });
   eStore.add({ at: now, category: 'Amateur', categories: ['Amateur'], actressName: 'Otra', actressId: 'slug:otra', sourceType: 'clip', site: 'Pornhub', device: 'iPhone', lubricant: 'with' });
+  eStore.add({ at: now, category: 'MILF', categories: ['MILF', 'Blonde', 'Big Tits'], actressName: 'Mia Malkova', actressId: 'slug:mia-malkova', sourceType: 'clip', site: 'Pornhub', device: 'iPad', lubricant: 'with' });
   aStore.put({ id: 'slug:pepita-test', name: 'Pepita Test', source: 'manual', fetchedAt: now });
   aStore.put({ id: 'slug:otra', name: 'Otra', source: 'manual', fetchedAt: now });
+  aStore.put({ id: 'slug:mia-malkova', name: 'Mia Malkova', source: 'ph-dataset', rank: '5', born: '1992-07-01', ethnicity: 'Caucasian', hair: 'Brunette', height: '163 cm', weight: '52 kg', cup: 'C', bust: '32', waist: '58', hip: '85', fetchedAt: now });
   await new Promise((r) => { tx.oncomplete = r; });
 
   const failures = [];
@@ -194,20 +196,14 @@ const minLengths = {
         failures.push(`PH dataset lookup failed for "Lana Rhoades": "${text2}"`);
       }
 
-      // Test: stats display name (not slug)
-      // Seed an entry for "Mia Malkova" with actressId = 'slug:mia-malkova'
-      const dbReq3 = dom.window.indexedDB.open('nuttracker');
-      await new Promise((res) => { dbReq3.onsuccess = res; });
-      const db3 = dbReq3.result;
-      const tx3 = db3.transaction(['entries'], 'readwrite');
-      tx3.objectStore('entries').add({ at: Date.now(), categories: [], category: 'X', actressName: 'Mia Malkova', actressId: 'slug:mia-malkova', device: 'iPad', lubricant: 'without' });
-      await new Promise((r) => { tx3.oncomplete = r; });
-
-      // Navigate to stats
+      // Test: stats display name (not slug) — Mia ya está sembrada en el seed inicial
+      const homeTab = dom.window.document.querySelector('[data-route="home"]');
+      homeTab.click();
+      await new Promise((r) => setTimeout(r, 400));
       const statsTab = dom.window.document.querySelector('[data-route="stats"]');
       statsTab.click();
       await new Promise((r) => setTimeout(r, 1500));
-      const actressNamesInStats = [...dom.window.document.querySelectorAll('.actress-row__name')].map(e => e.textContent);
+      const actressNamesInStats = [...dom.window.document.querySelectorAll('.row-item__title')].map(e => e.textContent);
       console.log('   stats actress names:', JSON.stringify(actressNamesInStats));
       if (actressNamesInStats.some(n => n === 'slug:mia-malkova' || /^slug:/.test(n))) {
         failures.push(`stats shows raw slug: ${actressNamesInStats}`);
