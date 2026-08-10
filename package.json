@@ -1,0 +1,19 @@
+{
+  "name": "NutTracker",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Tracker personal de pajas con estadísticas al estilo Pornhub Wrapped.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --host",
+    "deploy": "vite build && npx gh-pages -d dist"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0",
+    "vite-plugin-pwa": "^0.20.5",
+    "gh-pages": "^6.1.1"
+  },
+  "dependencies": {}
+}
