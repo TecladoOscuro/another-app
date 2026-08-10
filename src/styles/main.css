@@ -166,7 +166,7 @@ a {
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
-  padding-bottom: calc(54px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: 58px;
   scroll-behavior: smooth;
 }
 
@@ -178,13 +178,12 @@ a {
   z-index: 20;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  padding: 4px 0 calc(6px + var(--safe-bottom));
+  padding: 6px 0 6px;
   background: var(--tabbar-bg);
   backdrop-filter: saturate(180%) blur(28px);
   -webkit-backdrop-filter: saturate(180%) blur(28px);
   border-top: 1px solid var(--tabbar-border);
-  min-height: 50px;
-  height: calc(50px + var(--safe-bottom));
+  height: 58px;
   box-sizing: border-box;
 }
 
