@@ -31,7 +31,7 @@ function stripTags(s) {
 
 function parseCount(text) {
   if (!text) return null;
-  const cleaned = text.replace(/[^\dKkMm.]/g, '');
+  const cleaned = String(text).replace(/[^\dKkMm.]/g, '');
   const match = cleaned.match(/([\d.]+)\s*([KkMm]?)/);
   if (!match) return null;
   const num = parseFloat(match[1]);
@@ -50,6 +50,14 @@ function slugify(name) {
 }
 
 export { slugify };
+
+function looksLikeNotFound(html) {
+  return (
+    /page not found/i.test(html) ||
+    /<title>[^<]*not found/i.test(html) ||
+    /removed\s*all\s*of\s*her\s*content/i.test(html)
+  );
+}
 
 function extractFromHtml(html, name) {
   const out = {
@@ -72,27 +80,56 @@ function extractFromHtml(html, name) {
   const viewsMatch = html.match(/(\d+(?:\.\d+)?[KkMm]?)\s*<[^>]*>\s*Views/i);
   if (viewsMatch) out.videoViews = parseCount(viewsMatch[1]);
 
-  const relationMatch = html.match(/Relation(?:ship)?\s*Status[^<]*<[^>]*>([^<]+)/i);
-  if (relationMatch) out.relation = stripTags(relationMatch[1]);
+  const profileInfo = html.match(/<div[^>]+class="[^"]*infoPiece[^"]*"[^>]*>([\s\S]*?)<\/div>\s*<div[^>]+class="[^"]*infoPiece[^"]*"/gi) || [];
+  profileInfo.forEach((block) => {
+    const text = stripTags(block);
+    const lower = text.toLowerCase();
+    if (lower.includes('gender') && !out.gender) {
+      out.gender = text.replace(/gender:?/i, '').trim();
+    } else if (lower.includes('height') && !out.height) {
+      out.height = text.replace(/height:?/i, '').trim();
+    } else if (lower.includes('weight') && !out.weight) {
+      out.weight = text.replace(/weight:?/i, '').trim();
+    } else if (lower.includes('born') && !out.born) {
+      out.born = text.replace(/born:?/i, '').trim();
+    } else if (lower.includes('relationship') && !out.relation) {
+      out.relation = text.replace(/relationship\s*status:?/i, '').trim();
+    } else if (lower.includes('ethnicity') && !out.ethnicity) {
+      out.ethnicity = text.replace(/ethnicity:?/i, '').trim();
+    } else if (lower.includes('hair') && !out.hair) {
+      out.hair = text.replace(/hair\s*color:?/i, '').trim();
+    } else if (lower.includes('eye') && !out.eyes) {
+      out.eyes = text.replace(/eye\s*color:?/i, '').trim();
+    } else if (lower.includes('measurements') && !out.measurements) {
+      out.measurements = text.replace(/measurements:?/i, '').trim();
+    } else if (lower.includes('cup') && !out.cup) {
+      out.cup = text.replace(/cup\s*size:?/i, '').trim();
+    } else if (lower.includes('city') && !out.city) {
+      out.city = text.replace(/city\s*and\s*country:?/i, '').trim();
+    } else if (lower.includes('started') && !out.startedYear) {
+      const m = text.match(/(\d{4})/);
+      if (m) out.startedYear = m[1];
+    }
+  });
 
-  const genderMatch = html.match(/Gender[^<]*<[^>]*>([^<]+)/i);
-  if (genderMatch) out.gender = stripTags(genderMatch[1]);
+  const tagsSection = html.match(/<ul[^>]+class="[^"]*tagList[^"]*"[^>]*>([\s\S]*?)<\/ul>/i);
+  if (tagsSection) {
+    const tagMatches = [...tagsSection[1].matchAll(/<a[^>]+>([^<]+)<\/a>/g)];
+    out.tags = tagMatches.map((m) => stripTags(m[1])).filter(Boolean).slice(0, 20);
+  }
 
-  const bhMatch = html.match(/Height[^<]*<[^>]*>([^<]+)/i);
-  if (bhMatch) out.height = stripTags(bhMatch[1]);
-
-  const bwMatch = html.match(/Weight[^<]*<[^>]*>([^<]+)/i);
-  if (bwMatch) out.weight = stripTags(bwMatch[1]);
-
-  const bornMatch = html.match(/Born[^<]*<[^>]*>([^<]+)/i);
-  if (bornMatch) out.born = stripTags(bornMatch[1]);
-
-  const avatarMatch = html.match(/<img[^>]*class="[^"]*avatar[^"]*"[^>]*src="([^"]+)"/i);
+  const avatarMatch = html.match(/<img[^>]+class="[^"]*avatar[^"]*"[^>]+data-src="([^"]+)"/i) ||
+    html.match(/<img[^>]+class="[^"]*avatar[^"]*"[^>]+src="([^"]+)"/i);
   if (avatarMatch) out.avatar = avatarMatch[1];
 
   if (!out.avatar) {
     const metaMatch = html.match(/<meta[^>]+property="og:image"[^>]+content="([^"]+)"/i);
     if (metaMatch) out.avatar = metaMatch[1];
+  }
+
+  const bioMatch = html.match(/<div[^>]+class="[^"]*aboutSection[^"]*"[^>]*>([\s\S]*?)<\/div>/i);
+  if (bioMatch) {
+    out.bio = stripTags(bioMatch[1]).slice(0, 500);
   }
 
   return out;
@@ -104,26 +141,24 @@ async function fetchOnce(target) {
   return res.text();
 }
 
+function hasRealData(a) {
+  if (!a) return false;
+  return a.rank || a.videosCount || a.subscribers || a.born || a.height || a.weight;
+}
+
 export async function fetchActress(name, { force = false } = {}) {
-  const slug = slugify(name);
+  const trimmed = String(name || '').trim();
+  const slug = slugify(trimmed);
   if (!slug) {
-    return {
-      name,
-      id: `slug:`,
-      source: 'pornhub',
-      url: '',
-      fetchedAt: 0,
-      error: 'Nombre vacío',
-      notFound: true,
-    };
+    return { name: trimmed, id: '', source: 'manual', fetchedAt: 0, error: 'Vacío' };
   }
 
+  const stored = await getActressByName(trimmed);
   const cached = cache.get(slug);
-  if (!force && cached && Date.now() - cached.fetchedAt < 1000 * 60 * 60 * 24 * 7) {
+
+  if (!force && cached && cached.fetchedAt && Date.now() - cached.fetchedAt < 1000 * 60 * 60 * 24 * 7) {
     return cached;
   }
-
-  const stored = await getActressByName(name);
   if (!force && stored && stored.fetchedAt && Date.now() - stored.fetchedAt < 1000 * 60 * 60 * 24 * 7) {
     cache.set(slug, stored);
     return stored;
@@ -137,9 +172,9 @@ export async function fetchActress(name, { force = false } = {}) {
     try {
       const html = await fetchOnce(target);
       if (looksLikeNotFound(html)) {
-        const data = {
-          name,
+        const data = stored ? { ...stored, notFound: true, fetchedAt: Date.now() } : {
           id: `slug:${slug}`,
+          name: trimmed,
           source: 'pornhub',
           url: target,
           fetchedAt: Date.now(),
@@ -149,27 +184,31 @@ export async function fetchActress(name, { force = false } = {}) {
         cache.set(slug, data);
         return data;
       }
-      const data = extractFromHtml(html, name);
-      if (!data.rank && !data.videosCount && !data.subscribers) {
+      const data = extractFromHtml(html, trimmed);
+      const isEmpty = !hasRealData(data);
+      if (isEmpty) {
         data.notFound = true;
+        if (stored) Object.assign(data, { id: stored.id, url: stored.url });
       }
       await upsertActress(data);
       cache.set(slug, data);
       return data;
     } catch (err) {
-      if (stored && stored.fetchedAt) {
+      if (stored && hasRealData(stored)) {
         cache.set(slug, stored);
         return stored;
       }
-      const data = {
-        name,
-        id: `slug:${slug}`,
-        source: 'pornhub',
-        url: target,
-        fetchedAt: 0,
-        error: err.message,
-        notFound: true,
-      };
+      const data = stored
+        ? { ...stored, error: err.message, fetchedAt: 0 }
+        : {
+            id: `slug:${slug}`,
+            name: trimmed,
+            source: 'pornhub',
+            url: target,
+            fetchedAt: 0,
+            error: err.message,
+            notFound: true,
+          };
       cache.set(slug, data);
       return data;
     } finally {
@@ -181,12 +220,13 @@ export async function fetchActress(name, { force = false } = {}) {
   return promise;
 }
 
-function looksLikeNotFound(html) {
-  return (
-    /page not found/i.test(html) ||
-    /404/i.test(html.slice(0, 2000)) ||
-    /<title>[^<]*not found/i.test(html)
-  );
+export async function refreshActress(slug) {
+  const cached = cache.get(slug);
+  if (cached && cached.name) {
+    cache.delete(slug);
+    return fetchActress(cached.name, { force: true });
+  }
+  return null;
 }
 
 export function clearActressCache() {

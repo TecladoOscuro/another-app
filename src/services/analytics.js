@@ -125,8 +125,8 @@ export function yearReport(entries, year) {
 
   const summary = totals(yearEntries);
   const byCategory = topN(totalsByCategories(yearEntries), 5);
-  const byActress = topN(totalsBy(yearEntries, (e) => e.actressId || e.actressName || '—'), 5);
-  const bySite = topN(totalsBy(yearEntries, (e) => e.site || '—'), 5);
+  const byActress = topN(totalsBy(yearEntries, (e) => e.actressId || e.actressName || null), 5).filter(([k]) => k);
+  const bySite = topN(totalsBy(yearEntries, (e) => e.site || null), 5).filter(([k]) => k);
 
   const months = monthlySeries(yearEntries, year);
   const peakMonth = months.indexOf(Math.max(...months));
@@ -250,13 +250,14 @@ export function sourceBucket(actress) {
 
 export function distribution(entries, actresses, compute) {
   const map = new Map();
+  const aMap = new Map(actresses.map((a) => [a.id, a]));
+  const aByName = new Map(actresses.filter((a) => a.name).map((a) => [a.name.toLowerCase(), a]));
   for (const e of entries) {
     let key = e.actressId || e.actressName || null;
     if (!key) continue;
-    const a =
-      actresses.find((x) => x.id === key) ||
-      actresses.find((x) => x.name === key) ||
-      actresses.find((x) => x.id === e.actressId);
+    let a = aMap.get(key);
+    if (!a && e.actressName) a = aByName.get(e.actressName.toLowerCase());
+    if (!a && e.actressId) a = aByName.get(e.actressId.replace(/^slug:/, '').toLowerCase());
     const v = compute(a);
     if (!v) continue;
     map.set(v, (map.get(v) || 0) + 1);

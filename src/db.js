@@ -121,9 +121,9 @@ export async function getActress(id) {
 }
 
 export async function getActressByName(name) {
-  const { store } = await tx(STORES.actresses);
-  const idx = store.index('byName');
-  return reqToPromise(idx.get(name));
+  const all = await listActresses();
+  const lower = String(name).toLowerCase();
+  return all.find((a) => a.name && a.name.toLowerCase() === lower) || null;
 }
 
 export async function listActresses() {

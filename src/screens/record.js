@@ -7,7 +7,7 @@ import {
   listActresses,
   upsertActress,
 } from '../db.js';
-import { PH_CATEGORIES, SOURCE_TYPES, LUBRICANT_OPTIONS } from '../data/categories.js';
+import { SOURCE_TYPES, LUBRICANT_OPTIONS } from '../data/categories.js';
 import { fetchActress, slugify } from '../services/scraper.js';
 import { formatBigNumber } from '../services/date.js';
 import { escapeHtml, escapeAttr } from '../services/html.js';
@@ -43,33 +43,31 @@ export async function openRecordModal({ presetAt = null, editId = null } = {}) {
   }
 
   const now = presetAt ?? Date.now();
-  const recent = getRecentCategories();
   const allCats = await getOptions('category');
-  const allSites = await getOptions('site');
-  const allDevices = await getOptions('device');
-
   const existingCats = existing?.categories || (existing?.category ? [existing.category] : []);
 
   const body = document.createElement('div');
-
   body.innerHTML = `
     <form id="recordForm" autocomplete="off">
+
       <div class="field">
         <label>Categorías *</label>
         <div class="multi-cats" id="catChips"></div>
-        <button type="button" class="btn btn--ghost" id="toggleCatPicker" style="margin-top: 8px;">+ Añadir / elegir categorías</button>
+        <button type="button" class="btn btn--ghost" id="toggleCatPicker" style="margin-top: 6px;">
+          <span id="toggleCatPickerText">+ Elegir categorías</span>
+        </button>
         <div class="cat-picker" id="catPicker" hidden>
-          <div class="search">
-            <input type="text" id="catSearchInput" placeholder="Buscar categoría..." />
+          <div class="cat-picker__head">
+            <div class="search" style="flex: 1;">
+              <input type="text" id="catSearchInput" placeholder="Buscar..." />
+            </div>
           </div>
           <div class="cat-picker__list" id="catPickerList"></div>
-          <div class="field" style="margin-top: 8px;">
-            <input type="text" id="newCatInput" placeholder="O escribe una nueva categoría" />
+          <div class="cat-picker__add">
+            <input type="text" id="newCatInput" placeholder="O escribe una categoría nueva" />
+            <button type="button" class="btn btn--primary" id="addNewCat">Añadir</button>
           </div>
-          <div style="display:flex; gap: 6px;">
-            <button type="button" class="btn" id="addNewCat">Añadir</button>
-            <button type="button" class="btn btn--primary" id="doneCats">Listo</button>
-          </div>
+          <button type="button" class="btn" id="doneCats" style="margin-top: 4px;">Listo</button>
         </div>
       </div>
 
@@ -94,14 +92,14 @@ export async function openRecordModal({ presetAt = null, editId = null } = {}) {
             type="text"
             id="actressInput"
             name="actressName"
-            placeholder="Buscar o escribir nombre"
+            placeholder="Buscar guardada o nueva"
             list="actressList"
             autocomplete="off"
             value="${escapeAttr(existing?.actressName || '')}"
           />
           <datalist id="actressList"></datalist>
         </div>
-        <small id="actressInfo" class="subtle" style="margin-top: 6px; display: block;"></small>
+        <div id="actressInfo" class="actress-info"></div>
       </div>
 
       <div class="field" id="deviceField">
@@ -155,77 +153,106 @@ export async function openRecordModal({ presetAt = null, editId = null } = {}) {
     footer,
   });
 
+  // ---- Categorías ----
   const catChips = body.querySelector('#catChips');
+  const catPicker = body.querySelector('#catPicker');
+  const catPickerList = body.querySelector('#catPickerList');
+  const catSearchInput = body.querySelector('#catSearchInput');
+  const newCatInput = body.querySelector('#newCatInput');
+
   const selectedCats = new Set(existingCats);
+
   function rerenderChips() {
     catChips.innerHTML = '';
     if (selectedCats.size === 0) {
-      catChips.innerHTML = '<span class="muted" style="font-size: 13px;">Toca el botón para elegir al menos una.</span>';
+      const hint = document.createElement('span');
+      hint.className = 'muted';
+      hint.style.fontSize = '13px';
+      hint.textContent = 'Ninguna seleccionada';
+      catChips.appendChild(hint);
       return;
     }
     [...selectedCats].forEach((c) => {
       const chip = document.createElement('span');
       chip.className = 'chip is-active';
-      chip.innerHTML = `${escapeHtml(c)} <span style="margin-left: 4px; opacity: 0.7;">×</span>`;
+      chip.innerHTML = `<span>${escapeHtml(c)}</span> <span class="chip__remove" aria-hidden="true">×</span>`;
       chip.addEventListener('click', () => {
         selectedCats.delete(c);
         rerenderChips();
+        renderCatPickerList(catSearchInput.value);
       });
       catChips.appendChild(chip);
     });
   }
   rerenderChips();
 
-  const catPicker = body.querySelector('#catPicker');
-  const catPickerList = body.querySelector('#catPickerList');
-  const catSearchInput = body.querySelector('#catSearchInput');
-
   function renderCatPickerList(filter = '') {
     catPickerList.innerHTML = '';
-    const filtered = allCats
-      .filter((c) => c.toLowerCase().includes(filter.toLowerCase()))
-      .sort();
-    const recents = getRecentCategories().filter((c) => !filtered.includes(c));
-    const toShow = [...new Set([...recents, ...filtered])];
+    const f = filter.toLowerCase().trim();
+    const recents = getRecentCategories().filter((c) => c.toLowerCase().includes(f));
+    const matched = allCats.filter((c) => c.toLowerCase().includes(f));
+    const toShow = [...new Set([...recents, ...matched])].sort();
     if (!toShow.length) {
-      catPickerList.innerHTML = '<div class="muted" style="padding: 8px;">Sin coincidencias.</div>';
+      const empty = document.createElement('div');
+      empty.className = 'muted';
+      empty.style.fontSize = '13px';
+      empty.style.padding = '8px';
+      empty.textContent = 'No hay coincidencias. Escribe abajo para crear una nueva.';
+      catPickerList.appendChild(empty);
       return;
     }
     toShow.forEach((c) => {
-      const row = document.createElement('button');
-      row.type = 'button';
-      row.className = 'chip ' + (selectedCats.has(c) ? 'is-active' : '');
-      row.textContent = c;
-      row.addEventListener('click', () => {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'chip' + (selectedCats.has(c) ? ' is-active' : '');
+      chip.textContent = c;
+      chip.addEventListener('click', () => {
         if (selectedCats.has(c)) selectedCats.delete(c);
         else selectedCats.add(c);
         rerenderChips();
         renderCatPickerList(catSearchInput.value);
       });
-      catPickerList.appendChild(row);
+      catPickerList.appendChild(chip);
     });
   }
 
   body.querySelector('#toggleCatPicker').addEventListener('click', () => {
-    const open = !catPicker.hidden;
-    catPicker.hidden = open;
-    if (!open) renderCatPickerList('');
+    const willOpen = catPicker.hidden;
+    catPicker.hidden = !willOpen;
+    body.querySelector('#toggleCatPickerText').textContent = willOpen ? 'Cerrar' : '+ Elegir categorías';
+    if (willOpen) {
+      renderCatPickerList('');
+      catSearchInput.focus();
+    }
   });
   body.querySelector('#addNewCat').addEventListener('click', async () => {
-    const v = body.querySelector('#newCatInput').value.trim();
-    if (!v) return;
+    const v = newCatInput.value.trim();
+    if (!v) {
+      toast('Escribe el nombre');
+      newCatInput.focus();
+      return;
+    }
     await appendCustomOption('category', v);
-    allCats.push(v);
+    if (!allCats.includes(v)) allCats.push(v);
     selectedCats.add(v);
     rerenderChips();
-    body.querySelector('#newCatInput').value = '';
+    newCatInput.value = '';
     renderCatPickerList(catSearchInput.value);
+    toast(`Categoría "${v}" añadida`);
+  });
+  newCatInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      body.querySelector('#addNewCat').click();
+    }
   });
   body.querySelector('#doneCats').addEventListener('click', () => {
     catPicker.hidden = true;
+    body.querySelector('#toggleCatPickerText').textContent = '+ Elegir categorías';
   });
   catSearchInput.addEventListener('input', () => renderCatPickerList(catSearchInput.value));
 
+  // ---- Datalist actrices ----
   const actressDatalist = body.querySelector('#actressList');
   try {
     const storedActresses = await listActresses();
@@ -239,6 +266,7 @@ export async function openRecordModal({ presetAt = null, editId = null } = {}) {
       });
   } catch {}
 
+  // ---- Sitio / dispositivo ----
   const siteSelect = createSelectWithAdd({
     name: 'site',
     label: 'Sitio web',
@@ -264,6 +292,7 @@ export async function openRecordModal({ presetAt = null, editId = null } = {}) {
   sourceType.addEventListener('change', toggleSiteField);
   toggleSiteField();
 
+  // ---- Actriz: lookup ----
   let searchToken = 0;
   let typingTimer;
   const abortLookup = () => {
@@ -283,52 +312,38 @@ export async function openRecordModal({ presetAt = null, editId = null } = {}) {
   }
 
   function renderActressInfo(a) {
-    if (!a) return;
+    if (!a) {
+      actressInfo.innerHTML = '';
+      return;
+    }
     if (a.error && !a.fetchedAt) {
-      actressInfo.innerHTML = `<span class="warn">No se pudo obtener de Pornhub (${escapeHtml(a.error)}). Se guardará el nombre igualmente.</span>`;
+      actressInfo.innerHTML = `<div class="actress-info__row warn">Sin datos de Pornhub (${escapeHtml(a.error)}). Se guardará el nombre igualmente.</div>`;
       return;
     }
-    if (a.notFound) {
-      actressInfo.innerHTML = `<span class="muted">No encontrada en Pornhub. Se guardará como nombre manual.</span>`;
+    if (a.notFound && !hasRealActressData(a)) {
+      actressInfo.innerHTML = `<div class="actress-info__row">No encontrada en Pornhub. Se guardará como nombre manual.</div>`;
       return;
     }
-    const parts = [];
-    if (a.rank) parts.push(`Rank #${escapeHtml(a.rank)}`);
-    if (a.videosCount) parts.push(`${formatBigNumber(a.videosCount)} vídeos`);
-    if (a.subscribers) parts.push(`${formatBigNumber(a.subscribers)} subs`);
-    if (a.videoViews) parts.push(`${formatBigNumber(a.videoViews)} views`);
-    if (a.relation) parts.push(`Rel: ${escapeHtml(a.relation)}`);
-    if (a.gender) parts.push(escapeHtml(a.gender));
-    if (a.height) parts.push(escapeHtml(a.height));
-    if (a.weight) parts.push(escapeHtml(a.weight));
-    if (a.born) parts.push(escapeHtml(a.born));
-    actressInfo.innerHTML = parts.length
-      ? `<span class="muted">${parts.join(' · ')}</span>`
-      : '<span class="muted">Sin datos adicionales en PH.</span>';
-  }
-
-  async function lookupActress(name) {
-    const local = await findLocalActress(name);
-    if (local && local.fetchedAt) {
-      renderActressInfo(local);
-      autofillFromActress(local);
-      return;
+    const rows = [];
+    if (a.avatar) {
+      rows.push(`<div class="actress-info__avatar"><img src="${escapeHtml(a.avatar)}" alt="" loading="lazy"></div>`);
     }
-    let token = ++searchToken;
-    try {
-      const a = await fetchActress(name);
-      if (token !== searchToken) return;
-      renderActressInfo(a);
-      autofillFromActress(a);
-    } catch (err) {
-      actressInfo.innerHTML = `<span class="warn">Error de red: ${escapeHtml(err.message)}</span>`;
-    }
+    const meta = [];
+    if (a.rank) meta.push(`#${escapeHtml(a.rank)}`);
+    if (a.videosCount) meta.push(`${formatBigNumber(a.videosCount)} vídeos`);
+    if (a.subscribers) meta.push(`${formatBigNumber(a.subscribers)} subs`);
+    if (a.born) meta.push(escapeHtml(a.born));
+    if (a.relation) meta.push(escapeHtml(a.relation));
+    if (a.height) meta.push(escapeHtml(a.height));
+    if (a.weight) meta.push(escapeHtml(a.weight));
+    if (a.ethnicity) meta.push(escapeHtml(a.ethnicity));
+    if (a.measurements) meta.push(escapeHtml(a.measurements));
+    rows.push(`<div class="actress-info__meta">${meta.length ? meta.join(' · ') : 'PH sin datos detallados'}</div>`);
+    actressInfo.innerHTML = `<div class="actress-info__row">${rows.join('')}</div>`;
   }
 
   async function findLocalActress(name) {
     const lower = name.toLowerCase();
-    const exact = await getActressByName(name);
-    if (exact) return exact;
     const all = await listActresses();
     return (
       all.find((a) => a.name && a.name.toLowerCase() === lower) ||
@@ -336,20 +351,44 @@ export async function openRecordModal({ presetAt = null, editId = null } = {}) {
     );
   }
 
+  async function lookupActress(name) {
+    const local = await findLocalActress(name);
+    if (local && hasRealActressData(local)) {
+      renderActressInfo(local);
+      autofillFromActress(local);
+      return;
+    }
+    let token = ++searchToken;
+    actressInfo.innerHTML = `<div class="actress-info__row">Buscando en Pornhub…</div>`;
+    try {
+      const a = await fetchActress(name);
+      if (token !== searchToken) return;
+      renderActressInfo(a);
+      autofillFromActress(a);
+    } catch (err) {
+      actressInfo.innerHTML = `<div class="actress-info__row warn">Error de red: ${escapeHtml(err.message)}</div>`;
+    }
+  }
+
   actressInput.addEventListener('input', () => {
     clearTimeout(typingTimer);
     const name = actressInput.value.trim();
     if (!name) {
-      actressInfo.textContent = '';
+      actressInfo.innerHTML = '';
       return;
     }
-    actressInfo.textContent = 'Buscando en Pornhub…';
     typingTimer = setTimeout(() => lookupActress(name), 600);
   });
+  actressInput.addEventListener('change', () => {
+    const name = actressInput.value.trim();
+    if (name) lookupActress(name);
+  });
+
   if (existing?.actressName) {
-    actressInput.dispatchEvent(new Event('input'));
+    setTimeout(() => actressInput.dispatchEvent(new Event('input')), 50);
   }
 
+  // ---- Save / Cancel ----
   cancel.addEventListener('click', () => {
     abortLookup();
     m.close();
@@ -425,6 +464,11 @@ export async function openRecordModal({ presetAt = null, editId = null } = {}) {
       document.dispatchEvent(new CustomEvent('nuttracker:data-changed'));
     });
   }
+}
+
+function hasRealActressData(a) {
+  if (!a) return false;
+  return a.rank || a.videosCount || a.subscribers || a.born || a.height || a.weight || a.relation || a.ethnicity || a.measurements || a.avatar;
 }
 
 export default { openRecordModal };

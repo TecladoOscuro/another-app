@@ -853,17 +853,21 @@ a {
 }
 
 .bar__track {
-  background: var(--bg-elevated);
+  background: var(--bg);
   border-radius: 999px;
-  height: 10px;
+  height: 14px;
   overflow: hidden;
+  position: relative;
+  border: 1px solid var(--border);
 }
 
 .bar__fill {
+  display: block;
   height: 100%;
   background: linear-gradient(90deg, var(--accent), var(--accent-strong));
   border-radius: 999px;
   transition: width var(--duration-slow) var(--ease-ios);
+  min-width: 2px;
 }
 
 .bar__value {
@@ -932,13 +936,30 @@ a {
 
 .collapsible__chevron {
   color: var(--text-muted);
-  font-size: 14px;
+  font-size: 12px;
   transition: transform var(--duration) var(--ease-ios);
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
 }
 
-.collapsible__chevron.is-open {
-  transform: rotate(180deg);
+.collapsible__chevron::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg) translate(-2px, -2px);
+  transition: transform var(--duration) var(--ease-ios);
+}
+
+.collapsible__chevron.is-open::before {
+  transform: rotate(-135deg) translate(-2px, -2px);
 }
 
 .collapsible__body {
@@ -993,16 +1014,202 @@ a {
   padding: 4px 0;
 }
 
-/* ---- Actress count badge in stats ---- */
+/* ---- Wrapped hero (Pornhub Wrapped-style) ---- */
 
-.actress-card__count {
-  font-size: 13px;
+.wrapped-hero {
+  margin: 16px 0 24px;
+}
+
+.wrapped-hero__title {
+  font-size: 14px;
   font-weight: 700;
-  color: var(--accent);
-  background: var(--accent-soft);
-  padding: 4px 10px;
-  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  background: linear-gradient(90deg, var(--accent), #ff9a3c, #ff5e7e);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.wrapped-hero__grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.wrapped-card {
+  position: relative;
+  border-radius: var(--radius-lg);
+  padding: 14px;
+  color: #fff;
+  overflow: hidden;
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+}
+
+.wrapped-card::before {
+  content: "";
+  position: absolute;
+  top: -30%;
+  right: -30%;
+  width: 70%;
+  height: 70%;
+  border-radius: 50%;
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+.wrapped-card--pink {
+  background: linear-gradient(135deg, #ff3b6b, #ff1f57);
+}
+.wrapped-card--pink::before {
+  background: radial-gradient(circle, #ff7a95, transparent);
+}
+
+.wrapped-card--green {
+  background: linear-gradient(135deg, #00b894, #009f7a);
+}
+.wrapped-card--green::before {
+  background: radial-gradient(circle, #4cd964, transparent);
+}
+
+.wrapped-card--purple {
+  background: linear-gradient(135deg, #6c5ce7, #4834d4);
+}
+.wrapped-card--purple::before {
+  background: radial-gradient(circle, #a29bfe, transparent);
+}
+
+.wrapped-card--orange {
+  background: linear-gradient(135deg, #ff9f0a, #ff6b00);
+}
+.wrapped-card--orange::before {
+  background: radial-gradient(circle, #ffb340, transparent);
+}
+
+.wrapped-card--blue {
+  background: linear-gradient(135deg, #0984e3, #0652dd);
+}
+.wrapped-card--blue::before {
+  background: radial-gradient(circle, #74b9ff, transparent);
+}
+
+.wrapped-card__title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.85;
+  position: relative;
+  z-index: 1;
+}
+
+.wrapped-card__big {
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  position: relative;
+  z-index: 1;
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.wrapped-card__sub {
+  font-size: 12px;
+  opacity: 0.95;
+  position: relative;
+  z-index: 1;
+  line-height: 1.35;
+  margin-top: 4px;
+}
+
+/* ---- Actress info in modal ---- */
+
+.actress-info {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.actress-info__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+}
+
+.actress-info__row.warn {
+  color: var(--warning);
+  border-color: var(--warning);
+}
+
+.actress-info__avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  overflow: hidden;
   flex-shrink: 0;
+  background: var(--bg-elevated);
+}
+
+.actress-info__avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.actress-info__meta {
+  color: var(--text-muted);
+}
+
+/* ---- Chip with remove ---- */
+
+.chip.is-active {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.chip__remove {
+  font-size: 16px;
+  line-height: 1;
+  font-weight: 700;
+  opacity: 0.8;
+}
+
+/* ---- Cat picker head ---- */
+
+.cat-picker__head {
+  display: flex;
+  gap: 8px;
+}
+
+.cat-picker__add {
+  display: flex;
+  gap: 6px;
+}
+
+.cat-picker__add input {
+  flex: 1;
+  min-width: 0;
+}
+
+.cat-picker__add button {
+  flex-shrink: 0;
+  min-height: 44px;
+  padding: 0 12px;
+  font-size: 13px;
 }
 
 /* ---- Settings ---- */

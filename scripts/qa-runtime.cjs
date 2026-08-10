@@ -85,6 +85,21 @@ const minLengths = {
   // Espera inicial
   await new Promise((r) => setTimeout(r, 3000));
 
+  // Seed data so we can validate stats rendering with actual content
+  const dbReq = dom.window.indexedDB.open('nuttracker');
+  await new Promise((res) => { dbReq.onsuccess = res; });
+  const db = dbReq.result;
+  const tx = db.transaction(['entries', 'actresses'], 'readwrite');
+  const eStore = tx.objectStore('entries');
+  const aStore = tx.objectStore('actresses');
+  const now = Date.now();
+  eStore.add({ at: now - 86400000 * 5, category: 'Amateur', categories: ['Amateur', 'MILF'], actressName: 'Pepita Test', actressId: 'slug:pepita-test', sourceType: 'clip', site: 'Pornhub', device: 'iPhone', lubricant: 'with' });
+  eStore.add({ at: now - 86400000 * 3, category: 'Anal', categories: ['Anal', 'Teen'], actressName: 'Pepita Test', actressId: 'slug:pepita-test', sourceType: 'clip', site: 'Pornhub', device: 'iPhone', lubricant: 'with' });
+  eStore.add({ at: now, category: 'Amateur', categories: ['Amateur'], actressName: 'Otra', actressId: 'slug:otra', sourceType: 'clip', site: 'Pornhub', device: 'iPhone', lubricant: 'with' });
+  aStore.put({ id: 'slug:pepita-test', name: 'Pepita Test', source: 'manual', fetchedAt: now });
+  aStore.put({ id: 'slug:otra', name: 'Otra', source: 'manual', fetchedAt: now });
+  await new Promise((r) => { tx.oncomplete = r; });
+
   const failures = [];
   for (const t of ['home', 'stats', 'calendar', 'settings']) {
     errors.length = 0;
@@ -103,6 +118,30 @@ const minLengths = {
     if (len < minLengths[t]) {
       failures.push(`${t}: rendered only ${len} chars (expected >= ${minLengths[t]})`);
     }
+    // Check stats: at least 5 bar__fill elements should exist with non-zero width
+    if (t === 'stats') {
+      const fills = dom.window.document.querySelectorAll('.bar__fill');
+      const visibleFills = [...fills].filter((f) => {
+        const w = f.style.width;
+        return w && w !== '0%' && w !== '0';
+      });
+      console.log(`   bar__fill total: ${fills.length}, visible: ${visibleFills.length}`);
+      if (fills.length > 0 && visibleFills.length === 0) {
+        failures.push('stats: all bar__fill are 0%');
+      }
+      // heatmap should have cells
+      const heatmap = dom.window.document.querySelectorAll('.heatmap__cell');
+      console.log(`   heatmap cells: ${heatmap.length}`);
+      // top actress should be 'Pepita Test', not '-'
+      const actressNames = [...dom.window.document.querySelectorAll('.actress-card__name')].map(e => e.textContent);
+      console.log(`   top actress names: ${JSON.stringify(actressNames)}`);
+      if (actressNames.some(n => n === '—' || n === '-')) {
+        failures.push(`stats: top actress shows "—": ${actressNames}`);
+      }
+      // wrapped hero should be present
+      const wrapped = dom.window.document.querySelectorAll('.wrapped-card');
+      console.log(`   wrapped cards: ${wrapped.length}`);
+    }
     console.log(`OK ${t}: ${len} chars, 0 errors`);
   }
 
@@ -119,6 +158,42 @@ const minLengths = {
     if (!modal) failures.push('record modal did not open');
     else if (errors.length > 0) failures.push('record modal errors: ' + JSON.stringify(errors));
     else console.log('OK record modal: opened');
+
+    // Test 1: actress datalist shows seeded actresses
+    const datalist = dom.window.document.querySelector('#actressList');
+    if (datalist) {
+      const options = [...datalist.querySelectorAll('option')].map(o => o.value);
+      console.log('   actress datalist options:', JSON.stringify(options));
+      if (!options.includes('Pepita Test')) {
+        failures.push(`actress datalist missing seeded: ${options}`);
+      }
+    }
+
+    // Test 2: open cat picker, add a new category
+    const toggleBtn = dom.window.document.querySelector('#toggleCatPicker');
+    if (toggleBtn) {
+      toggleBtn.click();
+      await new Promise((r) => setTimeout(r, 200));
+      const newCatInput = dom.window.document.querySelector('#newCatInput');
+      if (newCatInput) {
+        newCatInput.value = 'NuevaCatTest';
+        const addBtn = dom.window.document.querySelector('#addNewCat');
+        addBtn.click();
+        await new Promise((r) => setTimeout(r, 300));
+        const chips = [...dom.window.document.querySelectorAll('.multi-cats .chip')];
+        const labels = chips.map(c => c.textContent.replace('×', '').trim());
+        console.log('   selected cats after add:', JSON.stringify(labels));
+        if (!labels.includes('NuevaCatTest')) {
+          failures.push(`new category not added: ${labels}`);
+        }
+      }
+    }
+
+    // close modal
+    const cancelBtn = [...dom.window.document.querySelectorAll('.modal-footer button')]
+      .find(b => b.textContent === 'Cancelar');
+    if (cancelBtn) cancelBtn.click();
+    await new Promise((r) => setTimeout(r, 400));
   } else {
     failures.push('recordBtn not found on home');
   }
