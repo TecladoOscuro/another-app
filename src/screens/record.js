@@ -569,9 +569,9 @@ export async function openRecordModal({ presetAt = null, editId = null, simple =
     });
   });
 
-  // Initial render
+  // Initial render (después de esperar al dataset)
   if (initialActressName) {
-    updateDropdown(initialActressName);
+    loadStarsDataset().then(() => updateDropdown(initialActressName));
   }
 
   // ---- Sitio (solo edit) ----
@@ -656,6 +656,9 @@ export async function openRecordModal({ presetAt = null, editId = null, simple =
   }
 
   async function lookupActress(name) {
+    // Esperar a que el dataset esté cargado
+    await loadStarsDataset();
+
     const all = await listActresses();
     const local = all.find((x) => x.name && x.name.toLowerCase() === name.toLowerCase());
 

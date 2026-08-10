@@ -10,7 +10,8 @@ import { toast } from './ui/modal.js';
 
 async function bootstrap() {
   await loadTheme();
-  loadStarsDataset(); // fire-and-forget
+  await loadStarsDataset();
+  document.documentElement.dataset.ready = '1';
 
   registerRoute('home', async (main) => {
     await renderHome(main);
