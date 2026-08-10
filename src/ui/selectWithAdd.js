@@ -6,9 +6,9 @@ export function createSelectWithAdd({ name, label, value = '', placeholder = '�
   wrap.className = 'field';
   wrap.innerHTML = `
     <label>${label}</label>
-    <div style="display:flex; gap: 6px;">
-      <select name="${name}" style="flex: 1;"></select>
-      <button type="button" class="btn" data-action="add" style="flex: 0 0 auto; min-height: 44px; padding: 0 14px;">+ Añadir</button>
+    <div class="select-with-add">
+      <select name="${name}"></select>
+      <button type="button" class="btn" data-action="add">+ Añadir</button>
     </div>
   `;
   const select = wrap.querySelector('select');

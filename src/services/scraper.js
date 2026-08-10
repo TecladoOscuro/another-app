@@ -106,40 +106,72 @@ async function fetchOnce(target) {
 
 export async function fetchActress(name, { force = false } = {}) {
   const slug = slugify(name);
+  if (!slug) {
+    return {
+      name,
+      id: `slug:`,
+      source: 'pornhub',
+      url: '',
+      fetchedAt: 0,
+      error: 'Nombre vacío',
+      notFound: true,
+    };
+  }
+
   const cached = cache.get(slug);
   if (!force && cached && Date.now() - cached.fetchedAt < 1000 * 60 * 60 * 24 * 7) {
     return cached;
   }
 
   const stored = await getActressByName(name);
-  if (!force && stored && Date.now() - (stored.fetchedAt || 0) < 1000 * 60 * 60 * 24 * 7) {
+  if (!force && stored && stored.fetchedAt && Date.now() - stored.fetchedAt < 1000 * 60 * 60 * 24 * 7) {
     cache.set(slug, stored);
     return stored;
   }
 
   if (inflight.has(slug)) return inflight.get(slug);
 
+  const target = `${BASE}/pornstar/${slug}`;
+
   const promise = (async () => {
-    const target = `${BASE}/pornstar/${slug}`;
     try {
       const html = await fetchOnce(target);
+      if (looksLikeNotFound(html)) {
+        const data = {
+          name,
+          id: `slug:${slug}`,
+          source: 'pornhub',
+          url: target,
+          fetchedAt: Date.now(),
+          notFound: true,
+        };
+        await upsertActress(data);
+        cache.set(slug, data);
+        return data;
+      }
       const data = extractFromHtml(html, name);
+      if (!data.rank && !data.videosCount && !data.subscribers) {
+        data.notFound = true;
+      }
       await upsertActress(data);
       cache.set(slug, data);
       return data;
     } catch (err) {
-      const fallback = stored
-        ? { ...stored, error: err.message, fetchedAt: 0 }
-        : {
-            name,
-            id: `slug:${slug}`,
-            source: 'pornhub',
-            url: target,
-            fetchedAt: 0,
-            error: err.message,
-          };
-      cache.set(slug, fallback);
-      return fallback;
+      if (stored && stored.fetchedAt) {
+        cache.set(slug, stored);
+        return stored;
+      }
+      const data = {
+        name,
+        id: `slug:${slug}`,
+        source: 'pornhub',
+        url: target,
+        fetchedAt: 0,
+        error: err.message,
+        notFound: true,
+      };
+      cache.set(slug, data);
+      return data;
     } finally {
       inflight.delete(slug);
     }
@@ -147,6 +179,14 @@ export async function fetchActress(name, { force = false } = {}) {
 
   inflight.set(slug, promise);
   return promise;
+}
+
+function looksLikeNotFound(html) {
+  return (
+    /page not found/i.test(html) ||
+    /404/i.test(html.slice(0, 2000)) ||
+    /<title>[^<]*not found/i.test(html)
+  );
 }
 
 export function clearActressCache() {

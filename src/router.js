@@ -1,5 +1,3 @@
-import { openRecordModal } from './screens/record.js';
-
 const routes = new Map();
 let currentRoute = null;
 let currentUnmount = null;
@@ -50,11 +48,8 @@ export function attachTabbar() {
   document.querySelectorAll('.tab').forEach((tab) => {
     tab.addEventListener('click', () => {
       const route = tab.dataset.route;
-      if (route === 'record') {
-        openRecordModal();
-      } else {
-        navigate(route);
-      }
+      if (!route || route === 'record') return;
+      navigate(route);
     });
   });
 }

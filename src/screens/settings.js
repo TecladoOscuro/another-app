@@ -17,17 +17,6 @@ export async function renderSettings(main) {
         En Android, el navegador ofrece el banner automáticamente.
       </div>
 
-      <div class="section-head"><h3>Apariencia</h3></div>
-      <div class="settings-group">
-        <div class="switch-row">
-          <div>
-            <span>Tema oscuro</span>
-            <small>Si lo activas, modo oscuro permanente.</small>
-          </div>
-          <button class="toggle ${theme === 'dark' ? 'is-on' : ''}" id="themeToggle" aria-label="Cambiar tema"></button>
-        </div>
-      </div>
-
       <div class="section-head"><h3>Datos</h3></div>
       <div class="settings-group">
         <div class="settings-row">

@@ -3,6 +3,7 @@ import {
   totals,
   topN,
   totalsBy,
+  totalsByCategories,
   monthlySeries,
   hourlyDistribution,
   weekdayDistribution,
@@ -12,18 +13,25 @@ import {
   uniqueActresses,
   avgDuration,
   weeklySeries,
+  ageBucket,
+  heightBucket,
+  weightBucket,
+  rankBucket,
+  sourceBucket,
+  distribution,
+  topActressesByScore,
 } from '../services/analytics.js';
 import { MONTHS_SHORT, MONTHS_ES, WEEKDAYS_ES, addDays, startOfDay, pad2 } from '../services/date.js';
 import { formatDuration } from '../services/date.js';
 import { escapeHtml } from '../services/html.js';
 
 const FILTERS = {
-  all: { label: 'Todo' },
+  all: { label: 'Todo', icon: '∞' },
   today: { label: 'Hoy', from: () => startOfDay(Date.now()), to: () => addDays(startOfDay(Date.now()), 1) },
-  '7d': { label: '7 días', from: () => addDays(startOfDay(Date.now()), -6), to: () => addDays(startOfDay(Date.now()), 1) },
-  '30d': { label: '30 días', from: () => addDays(startOfDay(Date.now()), -29), to: () => addDays(startOfDay(Date.now()), 1) },
-  '3m': { label: '3 meses', from: () => addDays(startOfDay(Date.now()), -89), to: () => addDays(startOfDay(Date.now()), 1) },
-  '6m': { label: '6 meses', from: () => addDays(startOfDay(Date.now()), -179), to: () => addDays(startOfDay(Date.now()), 1) },
+  '7d': { label: '7d', from: () => addDays(startOfDay(Date.now()), -6), to: () => addDays(startOfDay(Date.now()), 1) },
+  '30d': { label: '30d', from: () => addDays(startOfDay(Date.now()), -29), to: () => addDays(startOfDay(Date.now()), 1) },
+  '3m': { label: '3m', from: () => addDays(startOfDay(Date.now()), -89), to: () => addDays(startOfDay(Date.now()), 1) },
+  '6m': { label: '6m', from: () => addDays(startOfDay(Date.now()), -179), to: () => addDays(startOfDay(Date.now()), 1) },
   '1y': { label: '1 año', from: () => addDays(startOfDay(Date.now()), -364), to: () => addDays(startOfDay(Date.now()), 1) },
 };
 
@@ -32,6 +40,7 @@ let currentYear = null;
 let currentMonth = null;
 let currentDevice = '';
 let currentSourceType = '';
+let expandedSections = new Set();
 
 export async function renderStats(main) {
   const allEntries = await getAllEntries();
@@ -51,13 +60,19 @@ export async function renderStats(main) {
   const year = currentYear ?? today.getFullYear();
   const report = yearReport(entries, year);
 
+  const reportByCategory = (() => {
+    if (!report) return null;
+    const map = totalsByCategories(entries.filter((e) => new Date(e.at).getFullYear() === year));
+    return topN(map, 5);
+  })();
+
   const week = weeklySeries(entries, 12);
   const heatmap = heatmapByDay(entries, 182);
   const months = monthlySeries(entries, year);
   const hours = hourlyDistribution(entries);
   const weekdays = weekdayDistribution(entries);
 
-  const byCategory = topN(totalsBy(entries, (e) => e.category || 'Sin categoría'), 10);
+  const byCategory = topN(totalsByCategories(entries), 10);
   const byActress = topN(
     totalsBy(entries, (e) => e.actressId || e.actressName || '—'),
     10,
@@ -67,13 +82,24 @@ export async function renderStats(main) {
   const bySource = topN(totalsBy(entries, (e) => e.sourceType || '—'), 6);
   const byLubricant = topN(totalsBy(entries, (e) => e.lubricant || '—'), 6);
 
+  const byAge = distribution(entries, actresses, ageBucket);
+  const byHeight = distribution(entries, actresses, heightBucket);
+  const byWeight = distribution(entries, actresses, weightBucket);
+  const byRank = distribution(entries, actresses, rankBucket);
+  const byRelation = distribution(entries, actresses, (a) => a?.relation);
+  const byGender = distribution(entries, actresses, (a) => a?.gender);
+  const bySourceKind = distribution(entries, actresses, sourceBucket);
+
+  const topActresses = topActressesByScore(entries, actresses, 10);
+
   const heatVals = [...heatmap.values()];
   const heatMax = Math.max(1, ...heatVals);
-
   const heatColors = ['var(--bg-card)'];
   for (let i = 1; i <= 4; i++) {
     heatColors.push(`color-mix(in srgb, var(--accent) ${i * 22}%, var(--bg-card))`);
   }
+
+  const actressCount = uniqueActresses(entries);
 
   main.innerHTML = `
     <div class="screen">
@@ -81,49 +107,66 @@ export async function renderStats(main) {
       <p class="muted">Análisis completo. Privado, en local.</p>
 
       <div class="filter-bar">
-        <div class="filter-row" id="rangeChips">
-          ${Object.entries(FILTERS)
-            .map(
-              ([k, v]) =>
-                `<button class="chip ${currentFilter === k ? 'is-active' : ''}" data-filter="${k}">${v.label}</button>`,
-            )
-            .join('')}
-        </div>
-        <div class="filter-row" id="yearChips">
-          <button class="chip ${currentYear === null ? 'is-active' : ''}" data-year="">Año auto</button>
-          ${years
-            .map(
-              (y) =>
-                `<button class="chip ${currentYear === y ? 'is-active' : ''}" data-year="${y}">${y}</button>`,
-            )
-            .join('')}
+        <div class="filter-group">
+          <div class="filter-group__label">Periodo</div>
+          <div class="filter-row" id="rangeChips">
+            ${Object.entries(FILTERS)
+              .map(
+                ([k, v]) =>
+                  `<button class="chip ${currentFilter === k ? 'is-active' : ''}" data-filter="${k}">${escapeHtml(v.label)}</button>`,
+              )
+              .join('')}
+          </div>
         </div>
         ${
+          years.length > 1
+            ? `<div class="filter-group">
+                <div class="filter-group__label">Año</div>
+                <div class="filter-row" id="yearChips">
+                  <button class="chip ${currentYear === null ? 'is-active' : ''}" data-year="">Auto</button>
+                  ${years
+                    .map(
+                      (y) =>
+                        `<button class="chip ${currentYear === y ? 'is-active' : ''}" data-year="${y}">${y}</button>`,
+                    )
+                    .join('')}
+                </div>
+              </div>`
+            : ''
+        }
+        ${
           currentYear
-            ? `<div class="filter-row" id="monthChips">
-                <button class="chip ${currentMonth === null ? 'is-active' : ''}" data-month="">Mes completo</button>
-                ${MONTHS_SHORT.map(
-                  (m, i) =>
-                    `<button class="chip ${currentMonth === i ? 'is-active' : ''}" data-month="${i}">${m}</button>`,
-                ).join('')}
+            ? `<div class="filter-group">
+                <div class="filter-group__label">Mes</div>
+                <div class="filter-row" id="monthChips">
+                  <button class="chip ${currentMonth === null ? 'is-active' : ''}" data-month="">Todos</button>
+                  ${MONTHS_SHORT.map(
+                    (m, i) =>
+                      `<button class="chip ${currentMonth === i ? 'is-active' : ''}" data-month="${i}">${m}</button>`,
+                  ).join('')}
+                </div>
               </div>`
             : ''
         }
         ${
           devices.length
-            ? `<div class="filter-row">
-                <span class="muted" style="font-size: 12px; align-self: center;">Dispositivo:</span>
-                <button class="chip ${currentDevice === '' ? 'is-active' : ''}" data-device="">Todos</button>
-                ${devices.map((d) => `<button class="chip ${currentDevice === d ? 'is-active' : ''}" data-device="${escapeAttr(d)}">${escapeHtml(d)}</button>`).join('')}
+            ? `<div class="filter-group">
+                <div class="filter-group__label">Dispositivo</div>
+                <div class="filter-row">
+                  <button class="chip ${currentDevice === '' ? 'is-active' : ''}" data-device="">Todos</button>
+                  ${devices.map((d) => `<button class="chip ${currentDevice === d ? 'is-active' : ''}" data-device="${escapeHtml(d)}">${escapeHtml(d)}</button>`).join('')}
+                </div>
               </div>`
             : ''
         }
         ${
           sourceTypes.length
-            ? `<div class="filter-row">
-                <span class="muted" style="font-size: 12px; align-self: center;">Fuente:</span>
-                <button class="chip ${currentSourceType === '' ? 'is-active' : ''}" data-source="">Todas</button>
-                ${sourceTypes.map((s) => `<button class="chip ${currentSourceType === s ? 'is-active' : ''}" data-source="${escapeAttr(s)}">${escapeHtml(s)}</button>`).join('')}
+            ? `<div class="filter-group">
+                <div class="filter-group__label">Fuente</div>
+                <div class="filter-row">
+                  <button class="chip ${currentSourceType === '' ? 'is-active' : ''}" data-source="">Todas</button>
+                  ${sourceTypes.map((s) => `<button class="chip ${currentSourceType === s ? 'is-active' : ''}" data-source="${escapeHtml(s)}">${escapeHtml(s)}</button>`).join('')}
+                </div>
               </div>`
             : ''
         }
@@ -131,24 +174,24 @@ export async function renderStats(main) {
 
       <div class="stat-grid">
         <div class="stat-cell">
-          <div class="stat-cell__label">Total periodo</div>
+          <div class="stat-cell__label">Total</div>
           <div class="stat-cell__value">${t.count}</div>
-          <div class="stat-cell__hint">${formatDuration(t.totalSeconds)} en total</div>
-        </div>
-        <div class="stat-cell">
-          <div class="stat-cell__label">Media duración</div>
-          <div class="stat-cell__value">${avg ? formatDuration(avg) : '—'}</div>
-          <div class="stat-cell__hint">por sesión</div>
+          <div class="stat-cell__hint">en este periodo</div>
         </div>
         <div class="stat-cell">
           <div class="stat-cell__label">Racha</div>
           <div class="stat-cell__value">${streaks.longest}</div>
-          <div class="stat-cell__hint">máx. ${streaks.current} actual</div>
+          <div class="stat-cell__hint">actual ${streaks.current}</div>
         </div>
         <div class="stat-cell">
-          <div class="stat-cell__label">Actrices únicas</div>
-          <div class="stat-cell__value">${uniqueActresses(entries)}</div>
-          <div class="stat-cell__hint">en este filtro</div>
+          <div class="stat-cell__label">Actrices</div>
+          <div class="stat-cell__value">${actressCount}</div>
+          <div class="stat-cell__hint">únicas</div>
+        </div>
+        <div class="stat-cell">
+          <div class="stat-cell__label">Categorías</div>
+          <div class="stat-cell__value">${byCategory.length}</div>
+          <div class="stat-cell__hint">distintas</div>
         </div>
       </div>
 
@@ -167,179 +210,50 @@ export async function renderStats(main) {
           : ''
       }
 
-      <div class="section-head">
-        <h3>Heatmap · últimos 6 meses</h3>
-      </div>
-      <div class="card">
-        <div class="heatmap" id="heatmap"></div>
-        <div class="heatmap__legend">
-          menos
-          ${[0, 1, 2, 3, 4]
-            .map((i) => `<span class="heatmap__cell" style="background:${heatColors[i]}; border-color: transparent;"></span>`)
-            .join('')}
-          más
+      ${collapsibleSection('heatmap', 'Heatmap · últimos 6 meses', `
+        <div class="card">
+          <div class="heatmap" id="heatmap"></div>
+          <div class="heatmap__legend">
+            menos
+            ${[0, 1, 2, 3, 4]
+              .map((i) => `<span class="heatmap__cell" style="background:${heatColors[i]}; border-color: transparent;"></span>`)
+              .join('')}
+            más
+          </div>
         </div>
-      </div>
+      `)}
 
-      <div class="section-head">
-        <h3>Por mes · ${year}</h3>
-      </div>
-      <div class="card">
-        <div class="bars">
-          ${months
-            .map((v, i) => {
-              const max = Math.max(1, ...months);
-              const pct = Math.round((v / max) * 100);
-              return `
-            <div class="bar">
-              <span class="bar__label">${MONTHS_SHORT[i]}</span>
-              <span class="bar__track"><span class="bar__fill" style="width: ${pct}%"></span></span>
-              <span class="bar__value">${v}</span>
-            </div>`;
-            })
-            .join('')}
-        </div>
-      </div>
+      ${collapsibleSection('months', `Por mes · ${year}`, monthsBars(months))}
 
-      <div class="section-head">
-        <h3>Por hora del día</h3>
-      </div>
-      <div class="card">
-        <div class="bars">
-          ${hours
-            .map((v, i) => {
-              const max = Math.max(1, ...hours);
-              const pct = Math.round((v / max) * 100);
-              return `
-            <div class="bar">
-              <span class="bar__label">${pad2(i)}h</span>
-              <span class="bar__track"><span class="bar__fill" style="width: ${pct}%"></span></span>
-              <span class="bar__value">${v}</span>
-            </div>`;
-            })
-            .join('')}
-        </div>
-      </div>
+      ${collapsibleSection('hours', 'Por hora del día', hoursBars(hours))}
 
-      <div class="section-head">
-        <h3>Por día de la semana</h3>
-      </div>
-      <div class="card">
-        <div class="bars">
-          ${weekdays
-            .map((v, i) => {
-              const max = Math.max(1, ...weekdays);
-              const pct = Math.round((v / max) * 100);
-              return `
-            <div class="bar">
-              <span class="bar__label">${WEEKDAYS_ES[i]}</span>
-              <span class="bar__track"><span class="bar__fill" style="width: ${pct}%"></span></span>
-              <span class="bar__value">${v}</span>
-            </div>`;
-            })
-            .join('')}
-        </div>
-      </div>
+      ${collapsibleSection('weekdays', 'Por día de la semana', weekdayBars(weekdays))}
 
-      <div class="section-head">
-        <h3>Top categorías</h3>
-      </div>
-      ${
-        byCategory.length
-          ? `<div class="card"><div class="bars">${barsHtml(byCategory)}</div></div>`
-          : `<div class="empty">Sin datos.</div>`
-      }
+      ${collapsibleSection('categories', 'Top categorías', barsCard(byCategory, 10), entries.length > 0)}
 
-      <div class="section-head">
-        <h3>Top actrices</h3>
-      </div>
-      ${
-        byActress.length
-          ? `<div class="card">
-              <div class="list">
-                ${byActress
-                  .map(([id, count]) => {
-                    const a = actresses.find((x) => x.id === id || x.name === id);
-                    const name = a ? a.name : id;
-                    const initial = name[0] ? name[0].toUpperCase() : '?';
-                    return `
-                  <div class="actress-card">
-                    <div class="actress-card__avatar">${a && a.avatar ? `<img src="${a.avatar}" alt="" loading="lazy">` : escapeHtml(initial)}</div>
-                    <div class="actress-card__info">
-                      <div class="actress-card__name">${escapeHtml(name)}</div>
-                      <div class="actress-card__meta">${count} ${count === 1 ? 'vez' : 'veces'}</div>
-                    </div>
-                  </div>`;
-                  })
-                  .join('')}
-              </div>
-            </div>`
-          : `<div class="empty">Sin datos.</div>`
-      }
+      ${collapsibleSection('actresses', 'Top actrices', actressesCard(topActresses, entries, actresses), entries.length > 0)}
 
-      <div class="section-head">
-        <h3>Sitios / fuentes</h3>
-      </div>
-      ${
-        bySite.length
-          ? `<div class="card"><div class="bars">${barsHtml(bySite)}</div></div>`
-          : `<div class="empty">Sin datos.</div>`
-      }
+      ${collapsibleSection('taste-age', 'Tus gustos: edad', tasteCard(byAge), hasActressData(entries, actresses))}
+      ${collapsibleSection('taste-height', 'Tus gustos: altura', tasteCard(byHeight), hasActressData(entries, actresses))}
+      ${collapsibleSection('taste-weight', 'Tus gustos: peso', tasteCard(byWeight), hasActressData(entries, actresses))}
+      ${collapsibleSection('taste-rank', 'Tus gustos: ranking Pornhub', tasteCard(byRank), hasActressData(entries, actresses))}
+      ${collapsibleSection('taste-relation', 'Tus gustos: relación', tasteCard(byRelation), hasActressData(entries, actresses))}
+      ${collapsibleSection('taste-gender', 'Tus gustos: género', tasteCard(byGender), hasActressData(entries, actresses))}
+      ${collapsibleSection('taste-source', 'Tus gustos: fuente de datos', tasteCard(bySourceKind), hasActressData(entries, actresses))}
 
-      <div class="section-head">
-        <h3>Dispositivos</h3>
-      </div>
-      ${
-        byDevice.length
-          ? `<div class="card"><div class="bars">${barsHtml(byDevice)}</div></div>`
-          : `<div class="empty">Sin datos.</div>`
-      }
+      ${collapsibleSection('sites', 'Sitios', barsCard(bySite, 6))}
+      ${collapsibleSection('devices', 'Dispositivos', barsCard(byDevice, 6))}
+      ${collapsibleSection('source', 'Tipo de fuente', barsCard(bySource, 6))}
+      ${collapsibleSection('lube', 'Lubricante', barsCard(byLubricant, 6))}
 
-      <div class="section-head">
-        <h3>Tipo de fuente</h3>
-      </div>
-      ${
-        bySource.length
-          ? `<div class="card"><div class="bars">${barsHtml(bySource)}</div></div>`
-          : `<div class="empty">Sin datos.</div>`
-      }
-
-      <div class="section-head">
-        <h3>Lubricante</h3>
-      </div>
-      ${
-        byLubricant.length
-          ? `<div class="card"><div class="bars">${barsHtml(byLubricant)}</div></div>`
-          : `<div class="empty">Sin datos.</div>`
-      }
-
-      <div class="section-head">
-        <h3>Últimas 12 semanas</h3>
-      </div>
-      <div class="card">
-        <div class="bars">
-          ${[...week.entries()]
-            .map(([k, v]) => {
-              const max = Math.max(1, ...[...week.values()]);
-              const pct = Math.round((v / max) * 100);
-              return `
-            <div class="bar">
-              <span class="bar__label">${k.split('-W')[1]}</span>
-              <span class="bar__track"><span class="bar__fill" style="width: ${pct}%"></span></span>
-              <span class="bar__value">${v}</span>
-            </div>`;
-            })
-            .join('')}
-        </div>
-        <p class="subtle" style="margin-top: 8px;">Semanas ISO del periodo.</p>
-      </div>
+      ${collapsibleSection('weeks', 'Últimas 12 semanas', weeksCard(week))}
 
       <div class="card" style="margin-top: 16px;">
         <h3>Wrapped ${year}</h3>
         ${
           report
             ? `<p>Tu mes más activo: <b>${MONTHS_ES[report.peakMonth]}</b>.</p>
-               <p>Tu día de la semana preferido: <b>${WEEKDAYS_ES[report.peakWeekday]}</b>.</p>
+               <p>Tu día preferido: <b>${WEEKDAYS_ES[report.peakWeekday]}</b>.</p>
                <p>Tu hora pico: <b>${pad2(report.peakHour)}:00</b>.</p>
                ${
                  report.byActress[0]
@@ -354,31 +268,172 @@ export async function renderStats(main) {
   `;
 
   bindFilters(main);
+  bindCollapsibles(main);
+  bindExtraToggles(main);
+  renderHeatmap(heatmap, heatColors, heatMax);
+}
 
-  const heat = document.getElementById('heatmap');
-  if (heat) {
-    const today = startOfDay(Date.now());
-    const start = addDays(today, -181);
-    const offsetDow = (new Date(start).getDay() + 6) % 7;
-    const pad = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-    for (let i = 0; i < offsetDow; i++) {
-      const spacer = document.createElement('div');
-      spacer.className = 'heatmap__cell';
-      spacer.style.visibility = 'hidden';
-      heat.appendChild(spacer);
-    }
-    for (let i = 0; i < 182; i++) {
-      const t = addDays(start, i);
-      const v = heatmap.get(t) || 0;
-      const level = v === 0 ? 0 : Math.min(4, Math.ceil((v / heatMax) * 4));
-      const cell = document.createElement('div');
-      cell.className = 'heatmap__cell';
-      cell.style.background = heatColors[level];
-      cell.style.borderColor = 'transparent';
-      cell.title = `${pad(new Date(t))}: ${v}`;
-      heat.appendChild(cell);
+function bindExtraToggles(main) {
+  main.querySelectorAll('[data-toggle-extra]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.toggleExtra;
+      const el = document.getElementById(id);
+      if (!el) return;
+      const willOpen = el.hidden;
+      el.hidden = !willOpen;
+      btn.textContent = willOpen ? 'Ocultar' : btn.textContent.replace('Ver', 'Ver');
+      btn.textContent = willOpen ? 'Ocultar' : `Ver más`;
+    });
+  });
+}
+
+function collapsibleSection(id, title, body, hasData = true) {
+  const open = expandedSections.has(id) || (id === 'heatmap' || id === 'months' || id === 'hours' || id === 'weekdays' || id === 'categories');
+  if (!hasData) {
+    return `
+      <div class="section-head collapsible" data-section="${id}">
+        <h3>${escapeHtml(title)}</h3>
+        <span class="muted">sin datos</span>
+      </div>
+    `;
+  }
+  return `
+    <div class="section-head collapsible" data-section="${id}" role="button" tabindex="0">
+      <h3>${escapeHtml(title)}</h3>
+      <span class="collapsible__chevron ${open ? 'is-open' : ''}" aria-hidden="true">▾</span>
+    </div>
+    <div class="collapsible__body ${open ? 'is-open' : ''}" data-body="${id}">${body}</div>
+  `;
+}
+
+function monthsBars(months) {
+  return `<div class="card"><div class="bars">${barsList(months, (i) => MONTHS_SHORT[i])}</div></div>`;
+}
+
+function hoursBars(hours) {
+  return `<div class="card"><div class="bars">${barsList(hours, (i) => `${pad2(i)}h`)}</div></div>`;
+}
+
+function weekdayBars(weekdays) {
+  return `<div class="card"><div class="bars">${barsList(weekdays, (i) => WEEKDAYS_ES[i])}</div></div>`;
+}
+
+function weeksCard(week) {
+  return `<div class="card"><div class="bars">${[...week.entries()]
+    .map(([k, v]) => {
+      const max = Math.max(1, ...[...week.values()]);
+      const pct = Math.round((v / max) * 100);
+      return `
+        <div class="bar">
+          <span class="bar__label">${escapeHtml(k.split('-W')[1])}</span>
+          <span class="bar__track"><span class="bar__fill" style="width: ${pct}%"></span></span>
+          <span class="bar__value">${v}</span>
+        </div>`;
+    })
+    .join('')}</div>
+        <p class="subtle" style="margin-top: 8px;">Semanas ISO del periodo.</p></div>`;
+}
+
+function barsCard(map, limit) {
+  if (!map || map.length === 0) {
+    return `<div class="empty">Sin datos.</div>`;
+  }
+  const visible = map.slice(0, limit);
+  const extra = map.slice(limit);
+  let extraHtml = '';
+  if (extra.length) {
+    const id = `extra-${Math.random().toString(36).slice(2, 8)}`;
+    extraHtml = `
+      <button class="btn btn--ghost" data-toggle-extra="${id}" style="margin-top: 8px;">Ver ${extra.length} más</button>
+      <div id="${id}" class="collapsible__body" hidden>
+        <div class="bars">${barsHtml(extra)}</div>
+      </div>
+    `;
+  }
+  return `<div class="card"><div class="bars">${barsHtml(visible)}</div>${extraHtml}</div>`;
+}
+
+function actressesCard(topActresses, entries, actresses) {
+  if (!topActresses.length) {
+    return `<div class="empty">Sin datos.</div>`;
+  }
+  return `<div class="card"><div class="list">${topActresses
+    .map(({ actress, count }) => {
+      const name = actress?.name || '—';
+      const initial = name[0] ? name[0].toUpperCase() : '?';
+      const meta = [];
+      if (actress?.rank) meta.push(`#${actress.rank}`);
+      if (actress?.videosCount) meta.push(`${formatBigNumber(actress.videosCount)} vídeos`);
+      if (actress?.subscribers) meta.push(`${formatBigNumber(actress.subscribers)} subs`);
+      if (actress?.born) meta.push(escapeHtml(actress.born));
+      return `
+      <div class="actress-card">
+        <div class="actress-card__avatar">${actress?.avatar ? `<img src="${escapeHtml(actress.avatar)}" alt="" loading="lazy">` : escapeHtml(initial)}</div>
+        <div class="actress-card__info">
+          <div class="actress-card__name">${escapeHtml(name)}</div>
+          <div class="actress-card__meta">${meta.length ? meta.join(' · ') : `${count} ${count === 1 ? 'vez' : 'veces'}`}</div>
+        </div>
+        <div class="actress-card__count">${count}</div>
+      </div>`;
+    })
+    .join('')}</div></div>`;
+}
+
+function tasteCard(map) {
+  if (!map || map.size === 0) {
+    return `<div class="empty subtle">No hay datos de actriz suficientes. Asegúrate de escribir el nombre correcto y dejar que se cargue la info de Pornhub.</div>`;
+  }
+  const entries = [...map.entries()].sort((a, b) => b[1] - a[1]);
+  return `<div class="card"><div class="bars">${barsHtml(entries)}</div></div>`;
+}
+
+function barsList(arr, labelFn) {
+  const max = Math.max(1, ...arr);
+  return arr
+    .map((v, i) => {
+      const pct = Math.round((v / max) * 100);
+      return `
+        <div class="bar">
+          <span class="bar__label">${escapeHtml(labelFn(i))}</span>
+          <span class="bar__track"><span class="bar__fill" style="width: ${pct}%"></span></span>
+          <span class="bar__value">${v}</span>
+        </div>`;
+    })
+    .join('');
+}
+
+function barsHtml(arr) {
+  if (!arr.length) return '';
+  const max = Math.max(1, ...arr.map(([, v]) => v));
+  return arr
+    .map(([label, v]) => {
+      const pct = Math.round((v / max) * 100);
+      return `
+        <div class="bar">
+          <span class="bar__label">${escapeHtml(label)}</span>
+          <span class="bar__track"><span class="bar__fill" style="width: ${pct}%"></span></span>
+          <span class="bar__value">${v}</span>
+        </div>`;
+    })
+    .join('');
+}
+
+function hasActressData(entries, actresses) {
+  if (!entries.length) return false;
+  const map = new Map(actresses.map((a) => [a.id, a]));
+  for (const e of entries) {
+    const a = map.get(e.actressId);
+    if (a && (a.born || a.height || a.weight || a.rank || a.relation || a.gender)) {
+      return true;
     }
   }
+  return false;
+}
+
+function formatBigNumber(n) {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
+  if (n >= 1_000) return (n / 1_000).toFixed(1).replace(/\.0$/, '') + 'k';
+  return String(n);
 }
 
 function bindFilters(main) {
@@ -417,6 +472,28 @@ function bindFilters(main) {
   });
 }
 
+function bindCollapsibles(main) {
+  main.querySelectorAll('.section-head.collapsible').forEach((head) => {
+    const id = head.dataset.section;
+    head.addEventListener('click', () => toggleSection(id, main));
+    head.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        toggleSection(id, main);
+      }
+    });
+  });
+}
+
+function toggleSection(id, main) {
+  if (expandedSections.has(id)) expandedSections.delete(id);
+  else expandedSections.add(id);
+  const body = main.querySelector(`[data-body="${id}"]`);
+  const chev = main.querySelector(`[data-section="${id}"] .collapsible__chevron`);
+  if (body) body.classList.toggle('is-open');
+  if (chev) chev.classList.toggle('is-open');
+}
+
 function computeFilters(allEntries) {
   const f = {};
   if (currentFilter !== 'all') {
@@ -452,23 +529,30 @@ function applyFilter(entries, f) {
   });
 }
 
-function barsHtml(arr) {
-  const max = Math.max(1, ...arr.map(([, v]) => v));
-  return arr
-    .map(([label, v]) => {
-      const pct = Math.round((v / max) * 100);
-      return `
-        <div class="bar">
-          <span class="bar__label">${escapeHtml(label)}</span>
-          <span class="bar__track"><span class="bar__fill" style="width: ${pct}%"></span></span>
-          <span class="bar__value">${v}</span>
-        </div>`;
-    })
-    .join('');
-}
-
-function escapeAttr(s) {
-  return escapeHtml(s);
+function renderHeatmap(heatmap, heatColors, heatMax) {
+  const heat = document.getElementById('heatmap');
+  if (!heat) return;
+  const today = startOfDay(Date.now());
+  const start = addDays(today, -181);
+  const offsetDow = (new Date(start).getDay() + 6) % 7;
+  const pad = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  for (let i = 0; i < offsetDow; i++) {
+    const spacer = document.createElement('div');
+    spacer.className = 'heatmap__cell';
+    spacer.style.visibility = 'hidden';
+    heat.appendChild(spacer);
+  }
+  for (let i = 0; i < 182; i++) {
+    const t = addDays(start, i);
+    const v = heatmap.get(t) || 0;
+    const level = v === 0 ? 0 : Math.min(4, Math.ceil((v / heatMax) * 4));
+    const cell = document.createElement('div');
+    cell.className = 'heatmap__cell';
+    cell.style.background = heatColors[level];
+    cell.style.borderColor = 'transparent';
+    cell.title = `${pad(new Date(t))}: ${v}`;
+    heat.appendChild(cell);
+  }
 }
 
 export function resetStatsFilter() {
@@ -477,6 +561,7 @@ export function resetStatsFilter() {
   currentMonth = null;
   currentDevice = '';
   currentSourceType = '';
+  expandedSections = new Set();
 }
 
 export default { renderStats };

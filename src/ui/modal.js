@@ -1,25 +1,21 @@
 const modalRoot = () => document.getElementById('modalRoot');
 const toastRoot = () => document.getElementById('toastRoot');
 
-let activeBackdropClick = null;
-let activeClose = null;
+const stack = [];
+
+function applyZIndex(root) {
+  const base = 100;
+  const step = 10;
+  root.style.zIndex = String(base + stack.length * step);
+}
 
 export function openModal({ title, body, footer, onClose, dismissible = true }) {
   const root = modalRoot();
-  root.innerHTML = '';
-  root.classList.add('is-open');
-  root.setAttribute('aria-hidden', 'false');
-
-  const backdrop = document.createElement('div');
-  backdrop.className = 'modal-backdrop';
-  root.appendChild(backdrop);
-
   const sheet = document.createElement('div');
   sheet.className = 'modal-sheet';
   sheet.setAttribute('role', 'dialog');
   sheet.setAttribute('aria-modal', 'true');
   sheet.setAttribute('aria-label', title || 'Diálogo');
-  root.appendChild(sheet);
 
   const grabber = document.createElement('div');
   grabber.className = 'modal-grabber';
@@ -32,7 +28,7 @@ export function openModal({ title, body, footer, onClose, dismissible = true }) 
   const closeBtn = document.createElement('button');
   closeBtn.textContent = 'Cerrar';
   header.appendChild(h);
-  header.appendChild(closeBtn);
+  if (dismissible) header.appendChild(closeBtn);
   sheet.appendChild(header);
 
   const bodyEl = document.createElement('div');
@@ -49,52 +45,53 @@ export function openModal({ title, body, footer, onClose, dismissible = true }) 
     sheet.appendChild(f);
   }
 
+  const entry = { sheet, root, dismissible, onClose, onKey: null };
+  stack.push(entry);
+  applyZIndex(root);
+  root.appendChild(sheet);
+  requestAnimationFrame(() => {
+    sheet.classList.add('is-open');
+    root.classList.add('is-open');
+  });
+
   const close = () => {
-    root.classList.remove('is-open');
-    root.setAttribute('aria-hidden', 'true');
-    document.removeEventListener('keydown', onKey);
-    if (activeBackdropClick) {
-      backdrop.removeEventListener('click', activeBackdropClick);
-      activeBackdropClick = null;
-    }
-    if (activeClose === close) activeClose = null;
+    if (!stack.includes(entry)) return;
+    sheet.classList.remove('is-open');
+    document.removeEventListener('keydown', entry.onKey);
     setTimeout(() => {
-      if (!root.classList.contains('is-open')) root.innerHTML = '';
-    }, 300);
-    if (onClose) onClose();
+      if (sheet.parentNode) sheet.parentNode.removeChild(sheet);
+    }, 280);
+    const idx = stack.indexOf(entry);
+    if (idx >= 0) stack.splice(idx, 1);
+    if (stack.length === 0) {
+      root.classList.remove('is-open');
+      root.setAttribute('aria-hidden', 'true');
+    } else {
+      applyZIndex(root);
+    }
+    if (entry.onClose) entry.onClose();
   };
 
-  const onKey = (e) => {
-    if (e.key === 'Escape' && dismissible) close();
+  entry.onKey = (e) => {
+    if (e.key === 'Escape' && entry.dismissible && stack[stack.length - 1] === entry) {
+      close();
+    }
   };
+  document.addEventListener('keydown', entry.onKey);
 
-  activeBackdropClick = dismissible
-    ? (e) => {
-        if (e.target === backdrop) close();
-      }
-    : null;
-  if (activeBackdropClick) backdrop.addEventListener('click', activeBackdropClick);
-  closeBtn.addEventListener('click', close);
-  document.addEventListener('keydown', onKey);
-  activeClose = close;
-
-  attachSwipeToClose(sheet, close);
+  if (dismissible) {
+    closeBtn.addEventListener('click', close);
+    attachSwipeToClose(sheet, close);
+  }
 
   return { close, body: bodyEl, sheet };
 }
 
 export function closeModal() {
-  if (activeClose) {
-    activeClose();
-    return;
+  if (stack.length > 0) {
+    const top = stack[stack.length - 1];
+    top._close && top._close();
   }
-  const root = modalRoot();
-  if (!root.classList.contains('is-open')) return;
-  root.classList.remove('is-open');
-  root.setAttribute('aria-hidden', 'true');
-  setTimeout(() => {
-    root.innerHTML = '';
-  }, 300);
 }
 
 function attachSwipeToClose(sheet, close) {

@@ -10,6 +10,18 @@ export function totalsBy(entries, keyFn) {
   return map;
 }
 
+export function totalsByCategories(entries) {
+  const map = new Map();
+  for (const e of entries) {
+    const cats = e.categories?.length ? e.categories : e.category ? [e.category] : [];
+    for (const c of cats) {
+      if (!c) continue;
+      map.set(c, (map.get(c) || 0) + 1);
+    }
+  }
+  return map;
+}
+
 export { formatBigNumber } from './date.js';
 
 export function topN(map, n = 10) {
@@ -112,7 +124,7 @@ export function yearReport(entries, year) {
   }
 
   const summary = totals(yearEntries);
-  const byCategory = topN(totalsBy(yearEntries, (e) => e.category || 'Sin categoría'), 5);
+  const byCategory = topN(totalsByCategories(yearEntries), 5);
   const byActress = topN(totalsBy(yearEntries, (e) => e.actressId || e.actressName || '—'), 5);
   const bySite = topN(totalsBy(yearEntries, (e) => e.site || '—'), 5);
 
@@ -175,6 +187,97 @@ export function avgDuration(entries) {
   const withDur = entries.filter((e) => e.duration);
   if (!withDur.length) return 0;
   return Math.round(withDur.reduce((a, e) => a + e.duration, 0) / withDur.length);
+}
+
+function birthYear(a) {
+  if (!a || !a.born) return null;
+  const m = a.born.match(/\b(19|20)\d{2}\b/);
+  return m ? parseInt(m[0], 10) : null;
+}
+
+export function ageBucket(actress) {
+  const y = birthYear(actress);
+  if (!y) return null;
+  const age = new Date().getFullYear() - y;
+  if (age < 20) return '<20';
+  if (age < 25) return '20-24';
+  if (age < 30) return '25-29';
+  if (age < 35) return '30-34';
+  if (age < 40) return '35-39';
+  if (age < 50) return '40-49';
+  return '50+';
+}
+
+export function heightBucket(actress) {
+  if (!actress?.height) return null;
+  const m = actress.height.match(/(\d{2,3})/);
+  if (!m) return null;
+  const cm = parseInt(m[1], 10);
+  if (cm < 160) return '<160 cm';
+  if (cm < 170) return '160-169 cm';
+  if (cm < 180) return '170-179 cm';
+  return '180+ cm';
+}
+
+export function weightBucket(actress) {
+  if (!actress?.weight) return null;
+  const m = actress.weight.match(/(\d{2,3})/);
+  if (!m) return null;
+  const kg = parseInt(m[1], 10);
+  if (kg < 50) return '<50 kg';
+  if (kg < 60) return '50-59 kg';
+  if (kg < 70) return '60-69 kg';
+  return '70+ kg';
+}
+
+export function rankBucket(actress) {
+  if (!actress?.rank) return null;
+  const n = parseInt(String(actress.rank).replace(/[^\d]/g, ''), 10);
+  if (!n) return null;
+  if (n <= 100) return 'Top 100';
+  if (n <= 500) return 'Top 500';
+  if (n <= 2000) return 'Top 2k';
+  if (n <= 10000) return 'Top 10k';
+  return 'Top 10k+';
+}
+
+export function sourceBucket(actress) {
+  if (!actress) return 'manual';
+  if (actress.notFound) return 'manual (PH no)';
+  if (actress.source === 'manual') return 'manual';
+  return 'PH scraped';
+}
+
+export function distribution(entries, actresses, compute) {
+  const map = new Map();
+  for (const e of entries) {
+    let key = e.actressId || e.actressName || null;
+    if (!key) continue;
+    const a =
+      actresses.find((x) => x.id === key) ||
+      actresses.find((x) => x.name === key) ||
+      actresses.find((x) => x.id === e.actressId);
+    const v = compute(a);
+    if (!v) continue;
+    map.set(v, (map.get(v) || 0) + 1);
+  }
+  return map;
+}
+
+export function topActressesByScore(entries, actresses, limit = 5) {
+  const counts = new Map();
+  for (const e of entries) {
+    const key = e.actressId || e.actressName;
+    if (!key) continue;
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([id, count]) => {
+      const a = actresses.find((x) => x.id === id || x.name === id);
+      return { actress: a, count };
+    });
 }
 
 export function isoWeekKey(ts) {
