@@ -121,6 +121,11 @@ try {
     if (len < minLengths[t]) {
       failures.push(`${t}: rendered only ${len} chars (expected >= ${minLengths[t]})`);
     }
+    // jsdom no calcula dvh, así que el scroll test es solo informativo
+    if (t === 'home' || t === 'stats') {
+      const m = dom.window.document.getElementById('appMain');
+      console.log(`   scroll: ${m.scrollHeight}px / ${m.clientHeight}px`);
+    }
     if (t === 'stats') {
       const fills = dom.window.document.querySelectorAll('.row-item__bar span');
       const visible = [...fills].filter((f) => f.style.width && f.style.width !== '0%');
