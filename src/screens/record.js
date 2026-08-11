@@ -13,6 +13,7 @@ import { formatBigNumber } from '../services/date.js';
 import { escapeHtml, escapeAttr } from '../services/html.js';
 import { openModal, toast } from '../ui/modal.js';
 import { createSelectWithAdd } from '../ui/selectWithAdd.js';
+import { createClearableSelect } from '../ui/clearableSelect.js';
 import { getOptions, appendCustomOption } from '../services/options.js';
 import { getSetting, setSetting } from '../db.js';
 import { loadStarsDataset, searchStars, getStar } from '../services/actressSearch.js';
@@ -528,17 +529,21 @@ export async function openRecordModal({ presetAt = null, editId = null, simple =
     renderDropdown(combined.slice(0, 8), q);
   }
 
-  actressInput.addEventListener('focus', () => {
-    // Solo abre el dropdown si el usuario tocó el campo (no en autofocus inicial)
-    if (document.activeElement === actressInput) {
-      updateDropdown(actressInput.value);
-    }
+  // No abrimos el dropdown en focus automático de iOS.
+  // Solo abrimos en click real del usuario o cuando escribe.
+  let userInteracted = false;
+  actressInput.addEventListener('mousedown', () => {
+    userInteracted = true;
+    updateDropdown(actressInput.value);
   });
+  actressInput.addEventListener('touchstart', () => {
+    userInteracted = true;
+    updateDropdown(actressInput.value);
+  }, { passive: true });
   actressInput.addEventListener('blur', () => {
-    setTimeout(closeDropdown, 150);
+    setTimeout(closeDropdown, 200);
+    setTimeout(() => { userInteracted = false; }, 250);
   });
-  // Click en el input: abre el dropdown
-  actressInput.addEventListener('click', () => updateDropdown(actressInput.value));
 
   let lastInput = '';
   actressInput.addEventListener('input', () => {
@@ -577,7 +582,7 @@ export async function openRecordModal({ presetAt = null, editId = null, simple =
   // ---- Sitio (solo edit) ----
   let siteSelect = null;
   if (existing) {
-    siteSelect = createSelectWithAdd({
+    siteSelect = createClearableSelect({
       name: 'site',
       label: 'Sitio web',
       value: existing?.site || '',
@@ -586,8 +591,8 @@ export async function openRecordModal({ presetAt = null, editId = null, simple =
     body.querySelector('#siteField').replaceWith(siteSelect.wrap);
   }
 
-  // ---- Dispositivo (sin botón añadir) ----
-  const deviceSelect = createSimpleSelect({
+  // ---- Dispositivo ----
+  const deviceSelect = createClearableSelect({
     name: 'device',
     label: 'Dispositivo',
     value: defaultDevice,

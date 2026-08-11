@@ -6,12 +6,37 @@ import { renderStats } from './screens/stats.js';
 import { renderCalendar } from './screens/calendar.js';
 import { renderSettings } from './screens/settings.js';
 import { loadStarsDataset } from './services/actressSearch.js';
+import { listActresses, upsertActress } from './db.js';
 import { toast } from './ui/modal.js';
+
+async function enrichStoredActresses() {
+  // Autocompletar actrices locales con datos del dataset
+  try {
+    const local = await listActresses();
+    const enriched = [];
+    for (const a of local) {
+      if (a.source === 'ph-dataset' || a.source === 'ph-dataset-enriched') continue;
+      if (a.rank || a.born || a.ethnicity || a.hair) continue; // ya tiene datos
+      enriched.push(a);
+    }
+    // Esta función la proporciona el servicio de búsqueda
+    const { findOrCreateActress } = await import('./services/actressSearch.js');
+    for (const a of enriched.slice(0, 30)) {
+      try {
+        await findOrCreateActress(a.name);
+      } catch {}
+    }
+  } catch (e) {
+    console.warn('Enrich failed:', e);
+  }
+}
 
 async function bootstrap() {
   await loadTheme();
   await loadStarsDataset();
   document.documentElement.dataset.ready = '1';
+  // Autocompletar actrices locales en background
+  enrichStoredActresses();
 
   registerRoute('home', async (main) => {
     await renderHome(main);

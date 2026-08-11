@@ -85,6 +85,7 @@ body {
   margin: 0;
   padding: 0;
   height: 100%;
+  min-height: 100dvh;
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-stack);
@@ -93,7 +94,6 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overscroll-behavior-y: none;
-  background-color: var(--tabbar-bg);
 }
 
 body {
@@ -124,13 +124,9 @@ a {
 /* ---- App shell ---- */
 
 .app {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
   display: flex;
   flex-direction: column;
+  min-height: 100dvh;
   background: var(--bg);
   color: var(--text);
 }
@@ -1196,6 +1192,144 @@ a {
 .stats-subsection__sub {
   font-size: 12px;
   color: var(--text-subtle);
+}
+
+/* ---- Taste dashboard (donut + bars) ---- */
+
+.taste-donut {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 16px;
+  align-items: center;
+  padding: 12px;
+}
+
+.donut-wrap {
+  position: relative;
+  width: 140px;
+  height: 140px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.donut-svg {
+  display: block;
+}
+
+.donut-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.donut-center__pct {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.donut-center__label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-top: 4px;
+  text-align: center;
+}
+
+.donut-title {
+  position: absolute;
+  bottom: -16px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.taste-side {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.taste-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.taste-bars--compact {
+  gap: 6px;
+}
+
+.taste-bar {
+  display: grid;
+  grid-template-columns: 80px 1fr 40px;
+  align-items: center;
+  gap: 8px;
+}
+
+.taste-bar__label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.taste-bar__track {
+  background: var(--bg-elevated);
+  border-radius: 999px;
+  height: 10px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.taste-bar__fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  transition: width var(--duration-slow) var(--ease-ios);
+  min-width: 2px;
+}
+
+.taste-bar__value {
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--text-muted);
+}
+
+.taste-others {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.taste-other__title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: 4px;
 }
 
 /* ---- Taste chips (grid of percentages) ---- */

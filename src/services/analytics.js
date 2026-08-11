@@ -278,32 +278,29 @@ export function topActressesByScore(entries, actresses, limit = 5) {
     if (!key) continue;
     counts.set(key, (counts.get(key) || 0) + 1);
   }
+  const aById = new Map(actresses.map((a) => [a.id, a]));
+  const aByName = new Map(actresses.filter((a) => a.name).map((a) => [a.name.toLowerCase(), a]));
   return [...counts.entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, limit)
     .map(([id, count]) => {
       const lowerId = id.toLowerCase();
-      const a = actresses.find(
-        (x) =>
-          (x.id && x.id === id) ||
-          (x.name && x.name.toLowerCase() === lowerId) ||
-          (x.id && x.id.replace(/^slug:/, '').toLowerCase() === lowerId.replace(/^slug:/, '')) ||
-          (x.name && x.name.toLowerCase().includes(lowerId.replace(/^slug:/, ''))),
-      );
-      // Fallback: si no se encuentra pero el id es slug:foo, mostrar "foo" humanizado
+      const a =
+        aById.get(id) ||
+        aByName.get(lowerId) ||
+        aByName.get(lowerId.replace(/^slug:/, '')) ||
+        aById.get(lowerId.replace(/^slug:/, '')) ||
+        null;
+
       let displayName = a?.name;
       if (!displayName) {
-        if (id.startsWith('slug:')) {
-          displayName = id.replace(/^slug:/, '').replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+        if (lowerId.startsWith('slug:')) {
+          displayName = lowerId.replace(/^slug:/, '').replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
         } else {
           displayName = id;
         }
       }
-      return {
-        actress: a,
-        displayName,
-        count,
-      };
+      return { actress: a, displayName, count };
     });
 }
 
